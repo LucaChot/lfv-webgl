@@ -40,12 +40,13 @@ function compileShader(source, type) {
 function initShaders() {
     const vsSource = `
         attribute vec3 position;
-        attribute vec2 uv;
         uniform mat4 uModelViewMatrix;
         uniform mat4 uProjectionMatrix;
+        attribute vec2 uv;
         varying vec2 vUv;
 
         void main(void) {
+            vUv = uv;
             gl_Position = uProjectionMatrix * uModelViewMatrix * vec4(position, 1.0);
         }
     `;
@@ -57,6 +58,7 @@ function initShaders() {
             gl_FragColor = texture2D(sampler, vUv);
         }
     `;
+  
 
     const vertexShader = compileShader(vsSource, gl.VERTEX_SHADER);
     const fragmentShader = compileShader(fsSource, gl.FRAGMENT_SHADER);
@@ -75,15 +77,15 @@ function initShaders() {
     shaderProgram.positionAttribute = gl.getAttribLocation(shaderProgram, "position");
     gl.enableVertexAttribArray(shaderProgram.positionAttribute);
 
-    shaderProgram.uvAttribute = gl.getAttribLocation(shaderProgram, "uv");
+    shaderProgram.uvAttribute = gl.getAttribLocation(shaderProgram, 'uv');
     gl.enableVertexAttribArray(shaderProgram.uvAttribute);
 
     shaderProgram.modelViewMatrixUniform = gl.getUniformLocation(shaderProgram, "uModelViewMatrix");
     shaderProgram.projectionMatrixUniform = gl.getUniformLocation(shaderProgram, "uProjectionMatrix");
 
     // Create texture
-    var boxTexture = gl.createTexture( );
-    gl.bindTexture( gl.TEXTURE_2D, boxTexture );
+    var texture = gl.createTexture( );
+    gl.bindTexture( gl.TEXTURE_2D, texture );
     gl.texParameteri( gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE );
     gl.texParameteri( gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE );
     gl.texParameteri( gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR );
@@ -93,7 +95,10 @@ function initShaders() {
       gl.UNSIGNED_BYTE,
       document.getElementById( 'Tex' )
     );
-    gl.bindTexture( gl.TEXTURE_2D, null );
+
+    const uSamplerLocation = gl.getUniformLocation(shaderProgram, 'uSampler');
+    gl.uniform1i(uSamplerLocation, 0);
+    //gl.bindTexture( gl.TEXTURE_2D, null );
 }
 
 function initBuffers() {
@@ -110,10 +115,10 @@ function initBuffers() {
     gl.vertexAttribPointer(shaderProgram.positionAttribute, 3, gl.FLOAT, false, 0, 0);
 
     const uvs = [
-        0.0, 0.0,
-        1.0, 0.0,
-        1.0,  1.0,
-        0.0,  1.0,
+        0.0, 1.0,
+        1.0, 1.0,
+        1.0,  0.0,
+        0.0,  0.0,
     ];
 
     const uvBuffer = gl.createBuffer();
