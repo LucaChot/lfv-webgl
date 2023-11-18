@@ -68,11 +68,9 @@ function initShaders() {
 
         void main(void) {
             vUv = uv;
-            gl_Position = uProjectionMatrix * uModelViewMatrix * vec4(position, 1.0);
+            gl_Position = vec4(position, 1.0);
         }
     `;
-  
-            //gl_Position = uProjectionMatrix * uModelViewMatrix * vec4(position, 1.0);
 
     const fsSource = `
         precision mediump float;
@@ -88,18 +86,17 @@ function initShaders() {
         varying vec2 vUv;
 
         void main(void) {
-          vec4 p_k = vec4(vUv * 2.0 - 1.0, 0 , 1);
+          vec4 p_k = vec4(vUv.x * 2.0 - 1.0, 1.0 - 2.0 * vUv.y,  0 , 1);
 
           vec4 p_i = P_i * V_i * V_k_i * P_k_i * p_k;
 
           vec4 w_a = V_k_i * P_A_i * p_k;
-          float d = ((w_a.x * w_a.x) + (w_a.y + w_a.y)) / 2.0;
-          vec2 w = vec2((w_a.x * w_a.x), (w_a.y * w_a.y));
+          float d = ((w_a.x * w_a.x) + (w_a.y * w_a.y));
 
-          vec2 uv = (p_i.xy + 1.0) / 2.0;
+          vec2 uv = vec2((p_i.x + 1.0) / 2.0, (1.0 - p_i.y) / 2.0);
           vec3 tex = vec3(0.0, 0.0, 0.0);
           if (uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0) {
-            tex = vec3(texture2D(sampler, uv).rgb);// * ((1.0 - d);
+            tex = vec3(texture2D(sampler, uv).rgb) * (1.0 - d);
           }
           gl_FragColor = vec4(tex, 1.0); 
         }
@@ -174,10 +171,10 @@ function initBuffers() {
     gl.vertexAttribPointer(shaderProgram.positionAttribute, 3, gl.FLOAT, false, 0, 0);
 
     const uvs = [
-        0.0, 0.0,
-        1.0, 0.0,
-        1.0,  1.0,
-        0.0,  1.0,
+        0.0, 1.0,
+        1.0, 1.0,
+        1.0,  0.0,
+        0.0,  0.0,
     ];
 
     const uvBuffer = gl.createBuffer();
