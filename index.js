@@ -1,5 +1,3 @@
-//const { glMatrix } = require("gl-matrix");
-
 
 // app.js
 let gl;
@@ -8,13 +6,13 @@ let shaderProgram;
 let modelViewMatrix = glMatrix.mat4.create();
 let projectionMatrix = glMatrix.mat4.create();
 
-let cameraPosition = glMatrix.vec3.fromValues(0, 0, 5);
+let cameraPosition = glMatrix.vec3.fromValues(0, 0, 6);
 let targetPosition = glMatrix.vec3.fromValues(0, 0, 0);
 let upVector = glMatrix.vec3.fromValues(0, 1, 0);
 
 let angleX = 0;
 let angleY = 0;
-let distance = 5;
+let distance = 6;
 
 let mouseDown = false;
 let lastMouseX = 0;
@@ -22,6 +20,7 @@ let lastMouseY = 0;
 
 let N = glMatrix.vec4.fromValues(0,0,1,1);
 let wF = glMatrix.vec4.fromValues(0,0,1,1);
+let wA = glMatrix.vec4.fromValues(0,0,5,1);
 
 
 let inverseModelViewMatrix = glMatrix.mat4.create();
@@ -30,6 +29,8 @@ let inverseProjectionMatrix = glMatrix.mat4.create();
 let modelViewMatrix2 = glMatrix.mat4.create();
 let projectionMatrix2 = glMatrix.mat4.create();
 let camera2Position = glMatrix.vec3.fromValues(0, 0, 5);
+
+let inverseProjectionAMatrix = glMatrix.mat4.create();
 
 function initWebGL(canvas) {
     gl = canvas.getContext("webgl");
@@ -70,31 +71,35 @@ function initShaders() {
             gl_Position = uProjectionMatrix * uModelViewMatrix * vec4(position, 1.0);
         }
     `;
+  
+            //gl_Position = uProjectionMatrix * uModelViewMatrix * vec4(position, 1.0);
 
     const fsSource = `
         precision mediump float;
 
         uniform sampler2D sampler;
+
         uniform mat4 V_k_i;
         uniform mat4 P_k_i;
         uniform mat4 V_i;
         uniform mat4 P_i;
+        uniform mat4 P_A_i;
 
         varying vec2 vUv;
 
-        // Camera properties
-        vec3 cam_pos = vec3(0.0, 0.0, 5.0);
-        vec3 lookAtPosition = vec3(0.0, 0.0, 0.0);
-        vec3 upDirection = vec3(0.0, 1.0, 0.0);
-  
         void main(void) {
           vec4 p_k = vec4(vUv * 2.0 - 1.0, 0 , 1);
 
           vec4 p_i = P_i * V_i * V_k_i * P_k_i * p_k;
+
+          vec4 w_a = V_k_i * P_A_i * p_k;
+          float d = ((w_a.x * w_a.x) + (w_a.y + w_a.y)) / 2.0;
+          vec2 w = vec2((w_a.x * w_a.x), (w_a.y * w_a.y));
+
           vec2 uv = (p_i.xy + 1.0) / 2.0;
           vec3 tex = vec3(0.0, 0.0, 0.0);
           if (uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0) {
-            tex = vec3(texture2D(sampler, uv).rgb);
+            tex = vec3(texture2D(sampler, uv).rgb);// * ((1.0 - d);
           }
           gl_FragColor = vec4(tex, 1.0); 
         }
@@ -134,6 +139,9 @@ function initShaders() {
     gl.uniformMatrix4fv(shaderProgram.viUniform, false, modelViewMatrix2);
     gl.uniformMatrix4fv(shaderProgram.piUniform, false, projectionMatrix2);
 
+    shaderProgram.paUniform = gl.getUniformLocation(shaderProgram, "P_A_i");
+    gl.uniformMatrix4fv(shaderProgram.paUniform, false, inverseProjectionAMatrix);
+
     // Create texture
     var texture = gl.createTexture( );
     gl.bindTexture( gl.TEXTURE_2D, texture );
@@ -166,10 +174,10 @@ function initBuffers() {
     gl.vertexAttribPointer(shaderProgram.positionAttribute, 3, gl.FLOAT, false, 0, 0);
 
     const uvs = [
-        0.0, 1.0,
-        1.0, 1.0,
-        1.0,  0.0,
-        0.0,  0.0,
+        0.0, 0.0,
+        1.0, 0.0,
+        1.0,  1.0,
+        0.0,  1.0,
     ];
 
     const uvBuffer = gl.createBuffer();
@@ -178,21 +186,21 @@ function initBuffers() {
     gl.vertexAttribPointer(shaderProgram.uvAttribute , 2, gl.FLOAT, false, 0, 0);
 }
 
-function create4dProj(viewMatrix){
-  const N_c_4 = glMatrix.vec4.create();
-  glMatrix.vec4.transformMat4(N_c_4, N, viewMatrix);
-  const N_c = glMatrix.vec3.create();
-  glMatrix.vec3.copy(N_c, N_c_4);
+function create4dProj(normal, point, viewMatrix){
+  const normal_c_4 = glMatrix.vec4.create();
+  glMatrix.vec4.transformMat4(normal_c_4, normal, viewMatrix);
+  const normal_c = glMatrix.vec3.create();
+  glMatrix.vec3.copy(normal_c, normal_c_4);
 
-  const wF_c_4 = glMatrix.vec4.create();
-  glMatrix.vec4.transformMat4(wF_c_4, wF, viewMatrix);
-  const wF_c = glMatrix.vec3.create();
-  glMatrix.vec3.copy(wF_c, wF_c_4);
+  const point_c_4 = glMatrix.vec4.create();
+  glMatrix.vec4.transformMat4(point_c_4, point, viewMatrix);
+  const point_c = glMatrix.vec3.create();
+  glMatrix.vec3.copy(point_c, point_c_4);
 
   return glMatrix.mat4.fromValues(
     1.0, 0.0, 0.0, 0.0,
     0.0, 1.0, 0.0, 0.0,
-    N_c[0], N_c[1], N_c[2], -glMatrix.vec3.dot(N_c, wF_c),
+    normal_c[0], normal_c[1], normal_c[2], -glMatrix.vec3.dot(normal_c, point_c),
     0.0, 0.0, 1.0, 0.0
     );
 }
@@ -202,14 +210,15 @@ function initCamera() {
     glMatrix.mat4.invert(inverseModelViewMatrix, modelViewMatrix);
     glMatrix.mat4.perspective(projectionMatrix, Math.PI / 4, gl.canvas.width / gl.canvas.height, 0.1, 10);
     
-    p1 = create4dProj(modelViewMatrix);
+    p1 = create4dProj(N, wF, modelViewMatrix);
     glMatrix.mat4.invert(inverseProjectionMatrix, p1);
 
     glMatrix.mat4.lookAt(modelViewMatrix2, camera2Position, targetPosition, upVector);
-    p2 = create4dProj(modelViewMatrix2);
+    p2 = create4dProj(N, wF, modelViewMatrix2);
     glMatrix.mat4.copy(projectionMatrix2, p2);
 
-
+    A = create4dProj(N, wA, modelViewMatrix);
+    glMatrix.mat4.invert(inverseProjectionAMatrix, A);
 }
 
 function handleMouseDown(event) {
@@ -249,11 +258,38 @@ function updateCamera() {
 
     glMatrix.mat4.lookAt(modelViewMatrix, cameraPosition, targetPosition, upVector);
     glMatrix.mat4.invert(inverseModelViewMatrix, modelViewMatrix);
-    p1 = create4dProj(modelViewMatrix);
+
+    p1 = create4dProj(N, wF, modelViewMatrix);
     glMatrix.mat4.invert(inverseProjectionMatrix, p1);
 
-    console.log(inverseProjectionMatrix)
+    A = create4dProj(N, wA, modelViewMatrix);
+    glMatrix.mat4.invert(inverseProjectionAMatrix, A);
+
+
     render();
+}
+
+function setCameraPosition() {
+    // Get the value from the input box
+    let x = document.getElementById("inputX").value;
+    let y = document.getElementById("inputY").value;
+    let z = document.getElementById("inputZ").value;
+
+    let x_f = parseFloat(x);
+    let y_f = parseFloat(y);
+    let z_f = parseFloat(z);
+
+    if (!isNaN(x_f) && !isNaN(y_f) && !isNaN(z_f)) {
+      angleX = x_f;
+      angleY = y_f;
+      distance = z_f;
+      
+      updateCamera();
+
+    } else {
+        alert("Please enter a valid number.");
+    }
+
 }
 
 function setupEventListeners() {
@@ -271,8 +307,17 @@ function render() {
 
     gl.uniformMatrix4fv(shaderProgram.vkiUniform, false, inverseModelViewMatrix);
     gl.uniformMatrix4fv(shaderProgram.pkiUniform, false, inverseProjectionMatrix);
+    gl.uniformMatrix4fv(shaderProgram.paUniform, false, inverseProjectionAMatrix);
 
     gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
+
+    let data = glMatrix.vec3.fromValues(angleX, angleY, distance);
+
+    console.log(inverseModelViewMatrix);
+    console.log(inverseProjectionAMatrix);
+
+
+    document.getElementById("output").textContent= data;
 }
 
 function main() {

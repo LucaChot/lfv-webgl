@@ -7,7 +7,15 @@
   </head>
 
   <body>
-    <canvas id="glcanvas" width="640" height="480" />
+    <input type="number" id="inputX" placeholder="X">
+    <input type="number" id="inputY" placeholder="Y">
+    <input type="number" id="inputZ" placeholder="Z">
+    
+    <button onclick="setCameraPosition()">Update</button>
+    <div id="output"></div>
+
+    <canvas id="glcanvas" width="1400" height="800" />
+
     <img id="Tex" src="img.png" width="0" height="0"></img>
   </body>
 
