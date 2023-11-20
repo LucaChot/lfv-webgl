@@ -55,7 +55,6 @@ function loadImage(url) {
     image.onload = () => resolve(image);
     image.onerror = reject;
     image.src = url;
-    document.body.appendChild(image);
   });
 }
 
@@ -74,19 +73,6 @@ function compileShader(source, type) {
     return shader;
 }
 
-function createTexture(img){
-    var texture = gl.createTexture();
-    gl.bindTexture( gl.TEXTURE_2D, texture );
-    gl.texParameteri( gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE );
-    gl.texParameteri( gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE );
-    gl.texParameteri( gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR );
-    gl.texParameteri( gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR );
-    gl.texImage2D(
-      gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA,
-      gl.UNSIGNED_BYTE,
-      img
-    );
-}
 
 async function createTextureArray(){
 
@@ -98,11 +84,13 @@ async function createTextureArray(){
   gl.texParameteri( gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR );
   gl.texParameteri( gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR );
 
-  gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.RGBA, 1400, 800, imgsData.length);
+  gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.RGBA8, 1400, 800, imgsData.length);
 
   for (var i = 0; i < imgs.length; i++) {
     gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0,0,0, i, 1400, 800,1, gl.RGBA, gl.UNSIGNED_BYTE, imgs[i]);
   }
+
+  updateCamera();
 }
 
 function initShaders() {
@@ -194,17 +182,9 @@ function initShaders() {
     // Create texture
 
     createTextureArray()
-    //const uSamplerLocation = gl.getUniformLocation(shaderProgram, 'sampler[0]');
 
     const samplerArrayLocation = gl.getUniformLocation(shaderProgram, 'uSampler');
     gl.uniform1i(samplerArrayLocation, 0);
-
-    // Set the texture units for each texture
-    ////for (var i = 0; i < textures.length; i++) {
-      //gl.activeTexture(gl.TEXTURE0 + i);
-      //gl.bindTexture(gl.TEXTURE_2D, textures[i]);
-      //gl.uniform1i(uSamplerLocation, i);
-    //}
 }
 
 function initBuffers() {
@@ -218,7 +198,7 @@ function initBuffers() {
     const vertexBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-    gl.vertexAttribPointer(shaderProgram.positionAttribute, 3, gl.FLOAT, false, 0, 0);
+    gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
 
     const uvs = [
         0.0, 1.0,
@@ -230,7 +210,7 @@ function initBuffers() {
     const uvBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, uvBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(uvs), gl.STATIC_DRAW);
-    gl.vertexAttribPointer(shaderProgram.uvAttribute , 2, gl.FLOAT, false, 0, 0);
+    gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
 }
 
 function create4dProj(normal, point, viewMatrix){
