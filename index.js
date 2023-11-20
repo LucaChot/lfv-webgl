@@ -34,7 +34,8 @@ let inverseProjectionMatrix = glMatrix.mat4.create();
 
 let modelViewMatrix2 = glMatrix.mat4.create();
 let projectionMatrix2 = glMatrix.mat4.create();
-let camera2Position = glMatrix.vec3.fromValues(0, 0, 5);
+let camera2Position = glMatrix.vec3.fromValues(imgsData[0].u, imgsData[0].v, 5);
+console.log(camera2Position);
 
 let inverseProjectionAMatrix = glMatrix.mat4.create();
 
@@ -48,15 +49,6 @@ function initWebGL(canvas) {
     }
 }
 
-// Function to load an image
-function loadImage(url) {
-  return new Promise((resolve, reject) => {
-  var image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = reject;
-    image.src = url;
-  });
-}
 
 
 function compileShader(source, type) {
@@ -73,6 +65,15 @@ function compileShader(source, type) {
     return shader;
 }
 
+// Function to load an image
+function loadImage(url) {
+  return new Promise((resolve, reject) => {
+  var image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = url;
+  });
+}
 
 async function createTextureArray(){
 
@@ -158,10 +159,10 @@ function initShaders() {
     gl.useProgram(shaderProgram);
 
     shaderProgram.positionAttribute = gl.getAttribLocation(shaderProgram, "position");
-    gl.enableVertexAttribArray(shaderProgram.positionAttribute);
+    gl.enableVertexAttribArray(0);
 
     shaderProgram.uvAttribute = gl.getAttribLocation(shaderProgram, 'uv');
-    gl.enableVertexAttribArray(shaderProgram.uvAttribute);
+    gl.enableVertexAttribArray(1);
 
     shaderProgram.modelViewMatrixUniform = gl.getUniformLocation(shaderProgram, "uModelViewMatrix");
     shaderProgram.projectionMatrixUniform = gl.getUniformLocation(shaderProgram, "uProjectionMatrix");
@@ -233,6 +234,7 @@ function create4dProj(normal, point, viewMatrix){
 }
 
 function initCamera() {
+
     glMatrix.mat4.lookAt(modelViewMatrix, cameraPosition, targetPosition, upVector);
     glMatrix.mat4.invert(inverseModelViewMatrix, modelViewMatrix);
     glMatrix.mat4.perspective(projectionMatrix, Math.PI / 4, gl.canvas.width / gl.canvas.height, 0.1, 10);
