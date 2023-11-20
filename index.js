@@ -76,7 +76,14 @@ function compileShader(source, type) {
 
 async function createTextureArray(){
 
-  imgs = await Promise.all(imgsData.map(item => loadImage(item.src)))
+  //imgs = await Promise.all(imgsData.map(item => loadImage(item.src)))
+
+  var colors = [
+    [0, 0, 255, 255],
+    [0, 255, 0, 255],
+    [255, 0, 0, 255],
+    [0, 255, 255, 255],
+  ];
   var texture = gl.createTexture();
   gl.bindTexture( gl.TEXTURE_2D_ARRAY, texture );
   gl.texParameteri( gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE );
@@ -84,10 +91,10 @@ async function createTextureArray(){
   gl.texParameteri( gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR );
   gl.texParameteri( gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR );
 
-  gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.RGBA8, 1400, 800, imgsData.length);
+  gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.RGBA8, 1, 1, colors.length);
 
-  for (var i = 0; i < imgs.length; i++) {
-    gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0,0,0, i, 1400, 800,1, gl.RGBA, gl.UNSIGNED_BYTE, imgs[i]);
+  for (var i = 0; i < colors.length; i++) {
+    gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0,0,0, i, 1, 1 ,1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(colors[i]));
   }
 
   updateCamera();
