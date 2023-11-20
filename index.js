@@ -3,6 +3,12 @@
 let gl;
 let shaderProgram;
 
+// --------------------Images----------------------------------
+
+let folderPath = "./imgs"
+
+// --------------------Matrices-------------------------------- 
+
 let modelViewMatrix = glMatrix.mat4.create();
 let projectionMatrix = glMatrix.mat4.create();
 
@@ -32,13 +38,27 @@ let camera2Position = glMatrix.vec3.fromValues(0, 0, 5);
 
 let inverseProjectionAMatrix = glMatrix.mat4.create();
 
+// --------------------Functions-------------------------------
+
 function initWebGL(canvas) {
-    gl = canvas.getContext("webgl");
+    gl = canvas.getContext("webgl2");
     if (!gl) {
         console.error("Unable to initialize WebGL. Your browser may not support it.");
         return;
     }
 }
+
+// Function to load an image
+function loadImage(url) {
+  return new Promise((resolve, reject) => {
+  var image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = url;
+    document.body.appendChild(image);
+  });
+}
+
 
 function compileShader(source, type) {
     const shader = gl.createShader(type);
@@ -54,17 +74,48 @@ function compileShader(source, type) {
     return shader;
 }
 
+function createTexture(img){
+    var texture = gl.createTexture();
+    gl.bindTexture( gl.TEXTURE_2D, texture );
+    gl.texParameteri( gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE );
+    gl.texParameteri( gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE );
+    gl.texParameteri( gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR );
+    gl.texParameteri( gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR );
+    gl.texImage2D(
+      gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA,
+      gl.UNSIGNED_BYTE,
+      img
+    );
+}
+
+async function createTextureArray(){
+
+  imgs = await Promise.all(imgsData.map(item => loadImage(item.src)))
+  var texture = gl.createTexture();
+  gl.bindTexture( gl.TEXTURE_2D_ARRAY, texture );
+  gl.texParameteri( gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE );
+  gl.texParameteri( gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE );
+  gl.texParameteri( gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR );
+  gl.texParameteri( gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR );
+
+  gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.RGBA, 1400, 800, imgsData.length);
+
+  for (var i = 0; i < imgs.length; i++) {
+    gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0,0,0, i, 1400, 800,1, gl.RGBA, gl.UNSIGNED_BYTE, imgs[i]);
+  }
+}
+
 function initShaders() {
-    const vsSource = `
+    const vsSource = `#version 300 es
         precision mediump float;
 
-        attribute vec3 position;
-        attribute vec2 uv;
+        layout(location = 0) in vec3 position;
+        layout(location = 1) in vec2 uv;
 
         uniform mat4 uModelViewMatrix;
         uniform mat4 uProjectionMatrix;
 
-        varying vec2 vUv;
+        out vec2 vUv;
 
         void main(void) {
             vUv = uv;
@@ -72,10 +123,10 @@ function initShaders() {
         }
     `;
 
-    const fsSource = `
+    const fsSource = `#version 300 es
         precision mediump float;
 
-        uniform sampler2D sampler;
+        uniform mediump sampler2DArray uSampler;
 
         uniform mat4 V_k_i;
         uniform mat4 P_k_i;
@@ -83,7 +134,8 @@ function initShaders() {
         uniform mat4 P_i;
         uniform mat4 P_A_i;
 
-        varying vec2 vUv;
+        in vec2 vUv;
+        out vec4 fragColor;
 
         void main(void) {
           vec4 p_k = vec4(vUv.x * 2.0 - 1.0, 1.0 - 2.0 * vUv.y,  0 , 1);
@@ -96,9 +148,9 @@ function initShaders() {
           vec2 uv = vec2((p_i.x + 1.0) / 2.0, (1.0 - p_i.y) / 2.0);
           vec3 tex = vec3(0.0, 0.0, 0.0);
           if (uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0) {
-            tex = vec3(texture2D(sampler, uv).rgb) * (1.0 - d);
+            tex = vec3(texture(uSampler, vec3(uv, 0.0)).rgb) * (1.0 - d);
           }
-          gl_FragColor = vec4(tex, 1.0); 
+          fragColor = vec4(tex, 1.0); 
         }
     `;
   
@@ -140,21 +192,19 @@ function initShaders() {
     gl.uniformMatrix4fv(shaderProgram.paUniform, false, inverseProjectionAMatrix);
 
     // Create texture
-    var texture = gl.createTexture( );
-    gl.bindTexture( gl.TEXTURE_2D, texture );
-    gl.texParameteri( gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE );
-    gl.texParameteri( gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE );
-    gl.texParameteri( gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR );
-    gl.texParameteri( gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR );
-    gl.texImage2D(
-      gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA,
-      gl.UNSIGNED_BYTE,
-      document.getElementById( 'Tex' )
-    );
 
-    const uSamplerLocation = gl.getUniformLocation(shaderProgram, 'uSampler');
-    gl.uniform1i(uSamplerLocation, 0);
-    //gl.bindTexture( gl.TEXTURE_2D, null );
+    createTextureArray()
+    //const uSamplerLocation = gl.getUniformLocation(shaderProgram, 'sampler[0]');
+
+    const samplerArrayLocation = gl.getUniformLocation(shaderProgram, 'uSampler');
+    gl.uniform1i(samplerArrayLocation, 0);
+
+    // Set the texture units for each texture
+    ////for (var i = 0; i < textures.length; i++) {
+      //gl.activeTexture(gl.TEXTURE0 + i);
+      //gl.bindTexture(gl.TEXTURE_2D, textures[i]);
+      //gl.uniform1i(uSamplerLocation, i);
+    //}
 }
 
 function initBuffers() {
@@ -309,10 +359,6 @@ function render() {
     gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
 
     let data = glMatrix.vec3.fromValues(angleX, angleY, distance);
-
-    console.log(inverseModelViewMatrix);
-    console.log(inverseProjectionAMatrix);
-
 
     document.getElementById("output").textContent= data;
 }
