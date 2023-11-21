@@ -13,7 +13,7 @@ let modelViewMatrix = glMatrix.mat4.create();
 let projectionMatrix = glMatrix.mat4.create();
 
 let cameraPosition = glMatrix.vec3.fromValues(0, 0, 6);
-let cameraFOV = 90;
+let cameraFOV = 120;
 let targetPosition = glMatrix.vec3.fromValues(0, 0, 0);
 let upVector = glMatrix.vec3.fromValues(0, 1, 0);
 
@@ -26,7 +26,7 @@ let lastMouseX = 0;
 let lastMouseY = 0;
 
 let N = glMatrix.vec4.fromValues(0,0,1,1);
-let wF = glMatrix.vec4.fromValues(0,0,1,1);
+let wF = glMatrix.vec4.fromValues(0,0,0,1);
 let wA = glMatrix.vec4.fromValues(0,0,5,1);
 
 
@@ -93,7 +93,7 @@ async function createTextureArray(){
     gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0,0,0, i, 1400, 800,1, gl.RGBA, gl.UNSIGNED_BYTE, imgs[i]);
   }
 
-  updateCamera();
+  render();
 }
 
 function initShaders() {
@@ -284,9 +284,10 @@ function initCamera() {
 function createArrayView(){
   let arrViewMat4s = imgsData.map(item => {
     let arrCamPosition = glMatrix.vec3.fromValues(item.u, item.v, 5);
+    let arrCamTarget = glMatrix.vec3.fromValues(item.u, item.v, 0);
     let arrModelViewMatrix = glMatrix.mat4.create();
 
-    glMatrix.mat4.lookAt(arrModelViewMatrix, arrCamPosition, targetPosition, upVector);
+    glMatrix.mat4.lookAt(arrModelViewMatrix, arrCamPosition, arrCamTarget, upVector);
 
     let invArrModelViewMatrix = glMatrix.mat4.create(); 
     glMatrix.mat4.invert(invArrModelViewMatrix , arrModelViewMatrix);
@@ -306,9 +307,10 @@ function createArrayView(){
 function createArrayCameraProj(normal, wF){
   let arrProjMat4s = imgsData.map(item => {
     let arrCamPosition = glMatrix.vec3.fromValues(item.u, item.v, 5);
+    let arrCamTarget = glMatrix.vec3.fromValues(item.u, item.v, 0);
     let arrModelViewMatrix = glMatrix.mat4.create();
 
-    glMatrix.mat4.lookAt(arrModelViewMatrix, arrCamPosition, targetPosition, upVector);
+    glMatrix.mat4.lookAt(arrModelViewMatrix, arrCamPosition, arrCamTarget, upVector);
     return create4dProj(normal, wF, arrModelViewMatrix);
   });
 
@@ -365,11 +367,13 @@ function handleMouseMove(event) {
     lastMouseY = event.clientY;
 
     updateCamera();
+    render();
 }
 
 function handleMouseWheel(event) {
     distance += event.deltaY * 0.1;
     updateCamera();
+    render();
 }
 
 function updateCamera() {
@@ -385,9 +389,6 @@ function updateCamera() {
 
     A = create4dProj(N, wA, modelViewMatrix);
     glMatrix.mat4.invert(inverseProjectionAMatrix, A);
-
-
-    render();
 }
 
 function setCameraPosition() {
@@ -403,14 +404,36 @@ function setCameraPosition() {
     if (!isNaN(x_f) && !isNaN(y_f) && !isNaN(z_f)) {
       angleX = x_f;
       angleY = y_f;
-      distance = z_f;
+      distance = z_f - wF[2];
       
       updateCamera();
+      render();
 
     } else {
         alert("Please enter a valid number.");
     }
+}
 
+function setFPosition() {
+    // Get the value from the input box
+    let f = document.getElementById("inputF").value;
+
+    let F_f = parseFloat(f);
+
+    if (!isNaN(F_f)) {
+      distance += wF[2] - F_f;
+      wF = glMatrix.vec4.fromValues(0,0,F_f,1);
+      targetPosition = glMatrix.vec3.fromValues(0,0,F_f);
+      
+      
+      updateCamera();
+      initArrayCameras();
+      render();
+
+
+    } else {
+        alert("Please enter a valid number.");
+    }
 }
 
 function setupEventListeners() {
