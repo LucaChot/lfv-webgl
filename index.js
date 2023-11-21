@@ -13,7 +13,7 @@ let modelViewMatrix = glMatrix.mat4.create();
 let projectionMatrix = glMatrix.mat4.create();
 
 let cameraPosition = glMatrix.vec3.fromValues(0, 0, 6);
-let cameraFOV = 1;
+let cameraFOV = 90;
 let targetPosition = glMatrix.vec3.fromValues(0, 0, 0);
 let upVector = glMatrix.vec3.fromValues(0, 1, 0);
 
@@ -256,8 +256,8 @@ function create4dProj(normal, point, viewMatrix){
 
 function createInCamMatrix(width, height, projD){
   return glMatrix.mat4.fromValues(
-    width / projD, 0, 0, width / 2,
-    0, -width / projD, 0, height / 2,
+    width / (2 * projD), 0, 0, width / 2,
+    0, height / (2 * projD), 0, height / 2,
     0, 0, 1, 0,
     0, 0, 0, 1
   );
@@ -270,7 +270,7 @@ function initCamera() {
     glMatrix.mat4.invert(inverseModelViewMatrix, modelViewMatrix);
     glMatrix.mat4.perspective(projectionMatrix, Math.PI / 4, gl.canvas.width / gl.canvas.height, 0.1, 10);
 
-    let floatD = Math.tan(cameraFOV / 2 * Math.PI * 180);
+    let floatD = Math.tan(((cameraFOV / 2) / 180) * Math.PI);
     intrinsicCamMatrix = createInCamMatrix(1400, 800, floatD);
     glMatrix.mat4.invert(invIntrinsicCamMatrix, intrinsicCamMatrix);
     
@@ -353,7 +353,13 @@ function handleMouseUp() {
 }
 
 function handleMouseMove(event) {
-    if (!mouseDown) return;
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = event.clientX - rect.left;
+    const mouseY = event.clientY - rect.top;
+
+    // Check if the mouse position is over the canvas
+    const isOverCanvas = mouseX >= 0 && mouseX <= canvas.width && mouseY >= 0 && mouseY <= canvas.height;
+    if (!mouseDown || !isOverCanvas) return;
 
     const deltaX = event.clientX - lastMouseX;
     const deltaY = event.clientY - lastMouseY;
@@ -434,11 +440,28 @@ function setFPosition() {
     }
 }
 
+function handleFOVSlider(){
+  cameraFOV = document.getElementById('slider').value;
+  document.getElementById('sliderValue').textContent = 'Selected FOV: ' + cameraFOV;
+      
+  let floatD = Math.tan(((cameraFOV / 2) / 180) * Math.PI);
+  intrinsicCamMatrix = createInCamMatrix(1400, 800, floatD);
+  console.log(intrinsicCamMatrix);
+  glMatrix.mat4.invert(invIntrinsicCamMatrix, intrinsicCamMatrix);
+
+  gl.uniformMatrix4fv(shaderProgram.kUniform, false, intrinsicCamMatrix);
+  gl.uniformMatrix4fv(shaderProgram.kiUniform, false, invIntrinsicCamMatrix);
+
+  render();
+}
+
+
 function setupEventListeners() {
     document.addEventListener('mousedown', handleMouseDown);
     document.addEventListener('mouseup', handleMouseUp);
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('wheel', handleMouseWheel);
+    document.getElementById('slider').addEventListener('input', handleFOVSlider );
 }
 
 function render() {
@@ -460,7 +483,7 @@ function render() {
 }
 
 function main() {
-    const canvas = document.getElementById("glcanvas");
+    canvas = document.getElementById("glcanvas");
     initWebGL(canvas);
     initShaders();
     initBuffers();
