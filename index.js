@@ -13,7 +13,7 @@ let modelViewMatrix = glMatrix.mat4.create();
 let projectionMatrix = glMatrix.mat4.create();
 
 let cameraPosition = glMatrix.vec3.fromValues(0, 0, 6);
-let cameraFOV = 120;
+let cameraFOV = 1;
 let targetPosition = glMatrix.vec3.fromValues(0, 0, 0);
 let upVector = glMatrix.vec3.fromValues(0, 1, 0);
 
@@ -271,7 +271,7 @@ function initCamera() {
     glMatrix.mat4.perspective(projectionMatrix, Math.PI / 4, gl.canvas.width / gl.canvas.height, 0.1, 10);
 
     let floatD = Math.tan(cameraFOV / 2 * Math.PI * 180);
-    intrinsicCamMatrix = createInCamMatrix(floatD);
+    intrinsicCamMatrix = createInCamMatrix(1400, 800, floatD);
     glMatrix.mat4.invert(invIntrinsicCamMatrix, intrinsicCamMatrix);
     
     p1 = create4dProj(N, wF, modelViewMatrix);
@@ -289,9 +289,7 @@ function createArrayView(){
 
     glMatrix.mat4.lookAt(arrModelViewMatrix, arrCamPosition, arrCamTarget, upVector);
 
-    let invArrModelViewMatrix = glMatrix.mat4.create(); 
-    glMatrix.mat4.invert(invArrModelViewMatrix , arrModelViewMatrix);
-    return invArrModelViewMatrix ;
+    return arrModelViewMatrix ;
   });
 
   let flatArrViewMats = [];
@@ -458,6 +456,7 @@ function render() {
     let data = glMatrix.vec3.fromValues(angleX, angleY, distance);
 
     document.getElementById("output").textContent= data;
+    document.getElementById("position").textContent= cameraPosition;
 }
 
 function main() {
