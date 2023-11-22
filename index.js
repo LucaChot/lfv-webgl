@@ -2,6 +2,7 @@
 // app.js
 let gl;
 let shaderProgram;
+let canvas;
 
 // --------------------Images----------------------------------
 
@@ -138,7 +139,7 @@ function initShaders() {
           vec4 p_k = vec4(vUv.x * 2.0 - 1.0, 1.0 - 2.0 * vUv.y,  0 , 1);
 
 
-          vec4 w_a = V_k_i * P_A_i * p_k;
+          vec4 w_a = V_k_i * P_A_i * K_i * p_k;
           vec3 tex = vec3(0.0, 0.0, 0.0);
           float validPixelCount = 0.0;
 
@@ -255,9 +256,10 @@ function create4dProj(normal, point, viewMatrix){
 }
 
 function createInCamMatrix(width, height, projD){
+  aspect = width / height
   return glMatrix.mat4.fromValues(
-    width / (2 * projD), 0, 0, width / 2,
-    0, height / (2 * projD), 0, height / 2,
+    1 / (aspect * projD), 0, 0, 0,
+    0, 1 / projD, 0, 0,
     0, 0, 1, 0,
     0, 0, 0, 1
   );
@@ -268,6 +270,7 @@ function createInCamMatrix(width, height, projD){
 function initCamera() {
     glMatrix.mat4.lookAt(modelViewMatrix, cameraPosition, targetPosition, upVector);
     glMatrix.mat4.invert(inverseModelViewMatrix, modelViewMatrix);
+    
     glMatrix.mat4.perspective(projectionMatrix, Math.PI / 4, gl.canvas.width / gl.canvas.height, 0.1, 10);
 
     let floatD = Math.tan(((cameraFOV / 2) / 180) * Math.PI);
@@ -446,7 +449,6 @@ function handleFOVSlider(){
       
   let floatD = Math.tan(((cameraFOV / 2) / 180) * Math.PI);
   intrinsicCamMatrix = createInCamMatrix(1400, 800, floatD);
-  console.log(intrinsicCamMatrix);
   glMatrix.mat4.invert(invIntrinsicCamMatrix, intrinsicCamMatrix);
 
   gl.uniformMatrix4fv(shaderProgram.kUniform, false, intrinsicCamMatrix);
