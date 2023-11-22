@@ -8,13 +8,18 @@ let canvas;
 
 let folderPath = "./imgs"
 
-// --------------------Matrices-------------------------------- 
+// --------------------Inputs----------------------------------
 
-let modelViewMatrix = glMatrix.mat4.create();
-let projectionMatrix = glMatrix.mat4.create();
+let mouseDown = false;
+let lastMouseX = 0;
+let lastMouseY = 0;
+
+// --------------------Camera----------------------------------
+
+let cameraMode = false;
+let cameraFOV = 90;
 
 let cameraPosition = glMatrix.vec3.fromValues(0, 0, 6);
-let cameraFOV = 90;
 let targetPosition = glMatrix.vec3.fromValues(0, 0, 0);
 let upVector = glMatrix.vec3.fromValues(0, 1, 0);
 
@@ -22,14 +27,14 @@ let angleX = 0;
 let angleY = 0;
 let distance = 6;
 
-let mouseDown = false;
-let lastMouseX = 0;
-let lastMouseY = 0;
+// --------------------Matrices-------------------------------- 
+
+let modelViewMatrix = glMatrix.mat4.create();
+let projectionMatrix = glMatrix.mat4.create();
 
 let N = glMatrix.vec4.fromValues(0,0,1,1);
 let wF = glMatrix.vec4.fromValues(0,0,0,1);
 let wA = glMatrix.vec4.fromValues(0,0,5,1);
-
 
 let intrinsicCamMatrix = glMatrix.mat4.create();
 let invIntrinsicCamMatrix = glMatrix.mat4.create();
@@ -236,6 +241,17 @@ function initBuffers() {
     gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
 }
 
+function createVirtualViewMatrix(){
+  if(!cameraMode){
+    glMatrix.mat4.lookAt(modelViewMatrix, cameraPosition, targetPosition, upVector);
+  } else{
+    let forward = glMatrix.mat4.create();
+    glMatrix.mat4.copy(forward, cameraPosition);
+    forward[2] = forward[2] - 1;
+    glMatrix.mat4.lookAt(modelViewMatrix, cameraPosition, forward, upVector);
+  }
+}
+
 function create4dProj(normal, point, viewMatrix){
   const normal_c_4 = glMatrix.vec4.create();
   glMatrix.vec4.transformMat4(normal_c_4, normal, viewMatrix);
@@ -268,7 +284,7 @@ function createInCamMatrix(width, height, projD){
 
 
 function initCamera() {
-    glMatrix.mat4.lookAt(modelViewMatrix, cameraPosition, targetPosition, upVector);
+    createVirtualViewMatrix();
     glMatrix.mat4.invert(inverseModelViewMatrix, modelViewMatrix);
     
     glMatrix.mat4.perspective(projectionMatrix, Math.PI / 4, gl.canvas.width / gl.canvas.height, 0.1, 10);
@@ -356,39 +372,54 @@ function handleMouseUp() {
 }
 
 function handleMouseMove(event) {
-    const rect = canvas.getBoundingClientRect();
-    const mouseX = event.clientX - rect.left;
-    const mouseY = event.clientY - rect.top;
+  const rect = canvas.getBoundingClientRect();
+  const mouseX = event.clientX - rect.left;
+  const mouseY = event.clientY - rect.top;
 
-    // Check if the mouse position is over the canvas
-    const isOverCanvas = mouseX >= 0 && mouseX <= canvas.width && mouseY >= 0 && mouseY <= canvas.height;
-    if (!mouseDown || !isOverCanvas) return;
+  // Check if the mouse position is over the canvas
+  const isOverCanvas = mouseX >= 0 && mouseX <= canvas.width && mouseY >= 0 && mouseY <= canvas.height;
+  if (!mouseDown || !isOverCanvas) return;
 
-    const deltaX = event.clientX - lastMouseX;
-    const deltaY = event.clientY - lastMouseY;
+  const deltaX = event.clientX - lastMouseX;
+  const deltaY = event.clientY - lastMouseY;
 
+  if(!cameraMode){
     angleX -= deltaX * 0.01;
     angleY += deltaY * 0.01;
 
     lastMouseX = event.clientX;
     lastMouseY = event.clientY;
 
-    updateCamera();
-    render();
-}
-
-function handleMouseWheel(event) {
-    distance += event.deltaY * 0.1;
-    updateCamera();
-    render();
-}
-
-function updateCamera() {
     cameraPosition[0] = targetPosition[0] + distance * Math.sin(angleX);
     cameraPosition[1] = targetPosition[1] + distance * Math.sin(angleY);
     cameraPosition[2] = targetPosition[2] + distance * Math.cos(angleX);
+  } else {
+    cameraPosition[0] += deltaX * 0.01;
+    cameraPosition[1] += deltaY * 0.01;
+  }
 
-    glMatrix.mat4.lookAt(modelViewMatrix, cameraPosition, targetPosition, upVector);
+  updateCamera();
+  render();
+}
+
+function handleMouseWheel(event) {
+  if(!cameraMode){
+    distance += event.deltaY * 0.1;
+
+    cameraPosition[0] = targetPosition[0] + distance * Math.sin(angleX);
+    cameraPosition[1] = targetPosition[1] + distance * Math.sin(angleY);
+    cameraPosition[2] = targetPosition[2] + distance * Math.cos(angleX);
+  }
+  else{
+    cameraPosition[2] += event.deltaY * 0.5;
+  }
+
+  updateCamera();
+  render();
+}
+
+function updateCamera() {
+    createVirtualViewMatrix();
     glMatrix.mat4.invert(inverseModelViewMatrix, modelViewMatrix);
 
     p1 = create4dProj(N, wF, modelViewMatrix);
@@ -399,26 +430,35 @@ function updateCamera() {
 }
 
 function setCameraPosition() {
-    // Get the value from the input box
-    let x = document.getElementById("inputX").value;
-    let y = document.getElementById("inputY").value;
-    let z = document.getElementById("inputZ").value;
+  // Get the value from the input box
+  let x = document.getElementById("inputX").value;
+  let y = document.getElementById("inputY").value;
+  let z = document.getElementById("inputZ").value;
 
-    let x_f = parseFloat(x);
-    let y_f = parseFloat(y);
-    let z_f = parseFloat(z);
+  let x_f = parseFloat(x);
+  let y_f = parseFloat(y);
+  let z_f = parseFloat(z);
 
-    if (!isNaN(x_f) && !isNaN(y_f) && !isNaN(z_f)) {
+  if (!isNaN(x_f) && !isNaN(y_f) && !isNaN(z_f)) {
+    if(!cameraMode){
       angleX = x_f;
       angleY = y_f;
       distance = z_f - wF[2];
-      
-      updateCamera();
-      render();
-
     } else {
-        alert("Please enter a valid number.");
-    }
+      cameraPosition[0] = x_f;
+      cameraPosition[1] = y_f;
+      cameraPosition[2] = z_f;
+
+      let d_z = z_f - wF[2];
+      distance = Math.sqrt((x_f * x_f) + (y_f * y_f) + (d_z * d_z));
+    };
+    
+    updateCamera();
+    render();
+
+  } else {
+      alert("Please enter a valid number.");
+  }
 }
 
 function setFPosition() {
@@ -457,13 +497,20 @@ function handleFOVSlider(){
   render();
 }
 
+function handleCheckBox(){
+  cameraMode = document.getElementById('checkbox').checked;
+  updateCamera();
+  render();
+}
+
 
 function setupEventListeners() {
     document.addEventListener('mousedown', handleMouseDown);
     document.addEventListener('mouseup', handleMouseUp);
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('wheel', handleMouseWheel);
-    document.getElementById('slider').addEventListener('input', handleFOVSlider );
+    document.getElementById('slider').addEventListener('input', handleFOVSlider);
+    document.getElementById('checkbox').addEventListener('change', handleCheckBox);
 }
 
 function render() {
