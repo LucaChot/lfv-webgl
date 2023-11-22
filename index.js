@@ -371,6 +371,12 @@ function handleMouseUp() {
     mouseDown = false;
 }
 
+function updateOrbitalCamera(angleX, angleY, distance){
+    cameraPosition[0] = targetPosition[0] + distance * Math.sin(angleX);
+    cameraPosition[1] = targetPosition[1] + distance * Math.sin(angleY);
+    cameraPosition[2] = targetPosition[2] + distance * Math.cos(angleX);
+}
+
 function handleMouseMove(event) {
   const rect = canvas.getBoundingClientRect();
   const mouseX = event.clientX - rect.left;
@@ -390,9 +396,7 @@ function handleMouseMove(event) {
     lastMouseX = event.clientX;
     lastMouseY = event.clientY;
 
-    cameraPosition[0] = targetPosition[0] + distance * Math.sin(angleX);
-    cameraPosition[1] = targetPosition[1] + distance * Math.sin(angleY);
-    cameraPosition[2] = targetPosition[2] + distance * Math.cos(angleX);
+    updateOrbitalCamera(angleX, angleY, distance);
   } else {
     cameraPosition[0] += deltaX * 0.01;
     cameraPosition[1] += deltaY * 0.01;
@@ -406,9 +410,7 @@ function handleMouseWheel(event) {
   if(!cameraMode){
     distance += event.deltaY * 0.1;
 
-    cameraPosition[0] = targetPosition[0] + distance * Math.sin(angleX);
-    cameraPosition[1] = targetPosition[1] + distance * Math.sin(angleY);
-    cameraPosition[2] = targetPosition[2] + distance * Math.cos(angleX);
+    updateOrbitalCamera(angleX, angleY, distance);
   }
   else{
     cameraPosition[2] += event.deltaY * 0.5;
@@ -444,6 +446,7 @@ function setCameraPosition() {
       angleX = x_f;
       angleY = y_f;
       distance = z_f - wF[2];
+      updateOrbitalCamera(angleX, angleY, distance);
     } else {
       cameraPosition[0] = x_f;
       cameraPosition[1] = y_f;
