@@ -253,21 +253,24 @@ function createVirtualViewMatrix(){
 }
 
 function create4dProj(normal, point, viewMatrix){
-  const normal_c_4 = glMatrix.vec4.create();
-  glMatrix.vec4.transformMat4(normal_c_4, normal, viewMatrix);
-  const normal_c = glMatrix.vec3.create();
-  glMatrix.vec3.copy(normal_c, normal_c_4);
-
   const point_c_4 = glMatrix.vec4.create();
   glMatrix.vec4.transformMat4(point_c_4, point, viewMatrix);
   const point_c = glMatrix.vec3.create();
   glMatrix.vec3.copy(point_c, point_c_4);
 
+  const rotMat = glMatrix.mat3.fromValues(
+    viewMatrix[0], viewMatrix[1], viewMatrix[2],
+    viewMatrix[4], viewMatrix[5], viewMatrix[6],
+    viewMatrix[8], viewMatrix[9], viewMatrix[10],
+  );
+  const normal_c = glMatrix.vec3.create();
+  glMatrix.vec3.transformMat3(normal_c, normal, rotMat);
+
   return glMatrix.mat4.fromValues(
-    1.0, 0.0, 0.0, 0.0,
-    0.0, 1.0, 0.0, 0.0,
-    normal_c[0], normal_c[1], normal_c[2], -glMatrix.vec3.dot(normal_c, point_c),
-    0.0, 0.0, 1.0, 0.0
+    1.0, 0.0, normal_c[0], 0.0,
+    0.0, 1.0, normal_c[1], 0.0,
+    0.0, 0.0, normal_c[2], 1.0,
+    0.0, 0.0, -glMatrix.vec3.dot(normal_c, point_c), 0.0
     );
 }
 
@@ -280,8 +283,6 @@ function createInCamMatrix(width, height, projD){
     0, 0, 0, 1
   );
 }
-
-
 
 function initCamera() {
     createVirtualViewMatrix();
@@ -424,7 +425,7 @@ function updateCamera() {
     createVirtualViewMatrix();
     glMatrix.mat4.invert(inverseModelViewMatrix, modelViewMatrix);
 
-    p1 = create4dProj(N, wF, modelViewMatrix);
+    const p1 = create4dProj(N, wF, modelViewMatrix);
     glMatrix.mat4.invert(inverseProjectionMatrix, p1);
 
     A = create4dProj(N, wA, modelViewMatrix);
