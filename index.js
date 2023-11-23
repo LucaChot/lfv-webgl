@@ -1,4 +1,3 @@
-
 // app.js
 let gl;
 let shaderProgram;
@@ -13,6 +12,11 @@ let folderPath = "./imgs"
 let mouseDown = false;
 let lastMouseX = 0;
 let lastMouseY = 0;
+
+let keys = {
+  ArrowUp: false,
+  ArrowDown: false,
+};
 
 // --------------------Camera----------------------------------
 
@@ -321,7 +325,6 @@ function createArrayView(){
   return flatArrViewMats;
 }
 
-
 function createArrayCameraProj(normal, wF){
   let arrProjMat4s = imgsData.map(item => {
     let arrCamPosition = glMatrix.vec3.fromValues(item.u, item.v, 5);
@@ -360,6 +363,17 @@ function initArrayCameras (){
     arrUVs = createArrayCameraUV();
     gl.uniform2fv(shaderProgram.arrUvUniform, arrUVs);
 
+}
+
+function updateCamera() {
+    createVirtualViewMatrix();
+    glMatrix.mat4.invert(inverseModelViewMatrix, modelViewMatrix);
+
+    const p1 = create4dProj(N, wF, modelViewMatrix);
+    glMatrix.mat4.invert(inverseProjectionMatrix, p1);
+
+    A = create4dProj(N, wA, modelViewMatrix);
+    glMatrix.mat4.invert(inverseProjectionAMatrix, A);
 }
 
 function handleMouseDown(event) {
@@ -421,17 +435,6 @@ function handleMouseWheel(event) {
   render();
 }
 
-function updateCamera() {
-    createVirtualViewMatrix();
-    glMatrix.mat4.invert(inverseModelViewMatrix, modelViewMatrix);
-
-    const p1 = create4dProj(N, wF, modelViewMatrix);
-    glMatrix.mat4.invert(inverseProjectionMatrix, p1);
-
-    A = create4dProj(N, wA, modelViewMatrix);
-    glMatrix.mat4.invert(inverseProjectionAMatrix, A);
-}
-
 function setCameraPosition() {
   // Get the value from the input box
   let x = document.getElementById("inputX").value;
@@ -487,9 +490,32 @@ function setFPosition() {
     }
 }
 
+function handleArrowKey(){
+  if (keys.ArrowUp){
+    wF[2] += 5;
+  }
+  if (keys.ArrowDown){
+    wF[2] -= 5;
+  }
+  updateCamera();
+  render();
+}
+
+function handleKeyDown(event){
+  if (keys.hasOwnProperty(event.key)) {
+    keys[event.key] = true;
+    handleArrowKey();
+  }
+}
+
+function handleKeyUp(event){
+  if (keys.hasOwnProperty(event.key)) {
+    keys[event.key] = false;
+  }
+}
+
 function handleFOVSlider(){
   cameraFOV = document.getElementById('slider').value;
-  document.getElementById('sliderValue').textContent = 'Selected FOV: ' + cameraFOV;
       
   let floatD = Math.tan(((cameraFOV / 2) / 180) * Math.PI);
   intrinsicCamMatrix = createInCamMatrix(1400, 800, floatD);
@@ -509,12 +535,24 @@ function handleCheckBox(){
 
 
 function setupEventListeners() {
-    document.addEventListener('mousedown', handleMouseDown);
-    document.addEventListener('mouseup', handleMouseUp);
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('wheel', handleMouseWheel);
-    document.getElementById('slider').addEventListener('input', handleFOVSlider);
-    document.getElementById('checkbox').addEventListener('change', handleCheckBox);
+  document.addEventListener('mousedown', handleMouseDown);
+  document.addEventListener('mouseup', handleMouseUp);
+  document.addEventListener('mousemove', handleMouseMove);
+  document.addEventListener('wheel', handleMouseWheel);
+
+  document.addEventListener('keydown', handleKeyDown);
+  document.addEventListener('keyup', handleKeyUp);
+  document.getElementById('slider').addEventListener('input', handleFOVSlider);
+  document.getElementById('checkbox').addEventListener('change', handleCheckBox);
+}
+
+function updateText(){
+    let data = glMatrix.vec3.fromValues(angleX, angleY, distance);
+
+    document.getElementById("output").textContent= data;
+    document.getElementById("position").textContent= cameraPosition;
+    document.getElementById('sliderValue').textContent = 'Selected FOV: ' + cameraFOV;
+    document.getElementById("plane").textContent = 'Plane Z: ' + wF[2];
 }
 
 function render() {
@@ -529,10 +567,7 @@ function render() {
 
     gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
 
-    let data = glMatrix.vec3.fromValues(angleX, angleY, distance);
-
-    document.getElementById("output").textContent= data;
-    document.getElementById("position").textContent= cameraPosition;
+    updateText();
 }
 
 function main() {
