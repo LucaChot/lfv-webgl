@@ -33,25 +33,26 @@ let distance = 6;
 
 // --------------------Matrices-------------------------------- 
 
-let modelViewMatrix = glMatrix.mat4.create();
-let projectionMatrix = glMatrix.mat4.create();
+const modelViewMatrix = glMatrix.mat4.create();
+const projectionMatrix = glMatrix.mat4.create();
 
-let N = glMatrix.vec4.fromValues(0,0,1,1);
+const N = glMatrix.vec4.fromValues(0,0,1,1);
 let wF = glMatrix.vec4.fromValues(0,0,0,1);
-let wA = glMatrix.vec4.fromValues(0,0,5,1);
+const wA = glMatrix.vec4.fromValues(0,0,5,1);
 
-let intrinsicCamMatrix = glMatrix.mat4.create();
-let invIntrinsicCamMatrix = glMatrix.mat4.create();
-let inverseModelViewMatrix = glMatrix.mat4.create();
-let inverseProjectionMatrix = glMatrix.mat4.create();
+const intrinsicCamMatrix = glMatrix.mat4.create();
+const invIntrinsicCamMatrix = glMatrix.mat4.create();
+const inverseModelViewMatrix = glMatrix.mat4.create();
+const inverseProjectionMatrix = glMatrix.mat4.create();
 
-let arrProjMats = [];
 let arrUVs = [];
-let arrViewMats = [];
+
+let arrHTMatrices = [];
+const A = glMatrix.mat4.create();
 
 let inverseProjectionAMatrix = glMatrix.mat4.create();
 
-// --------------------Functions-------------------------------
+// --------------------Set-Up---------------------------------- 
 
 function initWebGL(canvas) {
     gl = canvas.getContext("webgl2");
@@ -61,7 +62,7 @@ function initWebGL(canvas) {
     }
 }
 
-
+// --------------------Shader----------------------------------
 
 function compileShader(source, type) {
     const shader = gl.createShader(type);
@@ -75,35 +76,6 @@ function compileShader(source, type) {
     }
 
     return shader;
-}
-
-// Function to load an image
-function loadImage(url) {
-  return new Promise((resolve, reject) => {
-  var image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = reject;
-    image.src = url;
-  });
-}
-
-async function createTextureArray(){
-
-  imgs = await Promise.all(imgsData.map(item => loadImage(item.src)))
-  var texture = gl.createTexture();
-  gl.bindTexture( gl.TEXTURE_2D_ARRAY, texture );
-  gl.texParameteri( gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE );
-  gl.texParameteri( gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE );
-  gl.texParameteri( gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR );
-  gl.texParameteri( gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR );
-
-  gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.RGBA8, 1400, 800, imgsData.length);
-
-  for (var i = 0; i < imgs.length; i++) {
-    gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0,0,0, i, 1400, 800,1, gl.RGBA, gl.UNSIGNED_BYTE, imgs[i]);
-  }
-
-  render();
 }
 
 function initShaders() {
@@ -129,17 +101,9 @@ function initShaders() {
 
         uniform mediump sampler2DArray uSampler;
 
-        uniform mat4 arr_V[4];
-        uniform mat4 arr_P[4];
-        uniform vec2 arr_uv[4];
-
-        uniform mat4 V_k_i;
-        uniform mat4 P_k_i;
-
-        uniform mat4 K;
-        uniform mat4 K_i;
-
-        uniform mat4 P_A_i;
+        uniform mat4 arr_HTM[${imgsData.length}];
+        uniform vec2 arr_uv[${imgsData.length}];
+        uniform mat4 A;
 
         in vec2 vUv;
         out vec4 fragColor;
@@ -148,12 +112,12 @@ function initShaders() {
           vec4 p_k = vec4(vUv.x * 2.0 - 1.0, 1.0 - 2.0 * vUv.y,  0 , 1);
 
 
-          vec4 w_a = V_k_i * P_A_i * K_i * p_k;
+          vec4 w_a = A * p_k;
           vec3 tex = vec3(0.0, 0.0, 0.0);
           float validPixelCount = 0.0;
 
-          for (int i = 0; i < 4; i++){
-            vec4 p_i = K * arr_P[i] * arr_V[i] * V_k_i * P_k_i * K_i * p_k;
+          for (int i = 0; i < ${imgsData.length}; i++){
+            vec4 p_i = arr_HTM[i] * p_k;
 
             float w_x = w_a.x - arr_uv[i].x;
             float w_y = w_a.y - arr_uv[i].y;
@@ -194,30 +158,16 @@ function initShaders() {
     shaderProgram.modelViewMatrixUniform = gl.getUniformLocation(shaderProgram, "uModelViewMatrix");
     shaderProgram.projectionMatrixUniform = gl.getUniformLocation(shaderProgram, "uProjectionMatrix");
 
-    shaderProgram.vkiUniform = gl.getUniformLocation(shaderProgram, "V_k_i");
-    shaderProgram.pkiUniform = gl.getUniformLocation(shaderProgram, "P_k_i");
-    gl.uniformMatrix4fv(shaderProgram.vkiUniform, false, inverseModelViewMatrix);
-    gl.uniformMatrix4fv(shaderProgram.pkiUniform, false, inverseProjectionMatrix);
-
-    shaderProgram.kUniform = gl.getUniformLocation(shaderProgram, "K");
-    shaderProgram.kiUniform = gl.getUniformLocation(shaderProgram, "K_i");
-    gl.uniformMatrix4fv(shaderProgram.kUniform, false, intrinsicCamMatrix);
-    gl.uniformMatrix4fv(shaderProgram.kiUniform, false, invIntrinsicCamMatrix);
-
-    shaderProgram.arrViewUniform = gl.getUniformLocation(shaderProgram, "arr_V");
-    shaderProgram.arrProjUniform = gl.getUniformLocation(shaderProgram, "arr_P");
+    shaderProgram.arrHTMUniform = gl.getUniformLocation(shaderProgram, "arr_HTM");
     shaderProgram.arrUvUniform = gl.getUniformLocation(shaderProgram, "arr_uv");
 
-    shaderProgram.paUniform = gl.getUniformLocation(shaderProgram, "P_A_i");
-    gl.uniformMatrix4fv(shaderProgram.paUniform, false, inverseProjectionAMatrix);
-
-    // Create texture
-
-    createTextureArray()
+    shaderProgram.paUniform = gl.getUniformLocation(shaderProgram, "A");
 
     const samplerArrayLocation = gl.getUniformLocation(shaderProgram, 'uSampler');
     gl.uniform1i(samplerArrayLocation, 0);
 }
+
+// --------------------Buffers---------------------------------
 
 function initBuffers() {
     const vertices = [
@@ -245,12 +195,43 @@ function initBuffers() {
     gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
 }
 
+// Function to load an image
+function loadImage(url) {
+  return new Promise((resolve, reject) => {
+  var image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = url;
+  });
+}
+
+async function createTextureArray(){
+
+  imgs = await Promise.all(imgsData.map(item => loadImage(item.src)))
+  var texture = gl.createTexture();
+  gl.bindTexture( gl.TEXTURE_2D_ARRAY, texture );
+  gl.texParameteri( gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE );
+  gl.texParameteri( gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE );
+  gl.texParameteri( gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR );
+  gl.texParameteri( gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR );
+
+  gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.RGBA8, 1400, 800, imgsData.length);
+
+  for (var i = 0; i < imgs.length; i++) {
+    gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0,0,0, i, 1400, 800,1, gl.RGBA, gl.UNSIGNED_BYTE, imgs[i]);
+  }
+
+  render();
+}
+
+// --------------------Camera-Matrix-Functions-----------------
+
 function createVirtualViewMatrix(){
   if(!cameraMode){
     glMatrix.mat4.lookAt(modelViewMatrix, cameraPosition, targetPosition, upVector);
   } else{
-    let forward = glMatrix.mat4.create();
-    glMatrix.mat4.copy(forward, cameraPosition);
+    let forward = glMatrix.vec3.create();
+    glMatrix.vec3.copy(forward, cameraPosition);
     forward[2] = forward[2] - 1;
     glMatrix.mat4.lookAt(modelViewMatrix, cameraPosition, forward, upVector);
   }
@@ -280,101 +261,107 @@ function create4dProj(normal, point, viewMatrix){
 
 function createInCamMatrix(width, height, projD){
   aspect = width / height
-  return glMatrix.mat4.fromValues(
+  glMatrix.mat4.copy(intrinsicCamMatrix, glMatrix.mat4.fromValues(
     1 / (aspect * projD), 0, 0, 0,
     0, 1 / projD, 0, 0,
     0, 0, 1, 0,
     0, 0, 0, 1
-  );
+  ));
 }
+
+// --------------------Virtual-Camera--------------------------
 
 function initCamera() {
-    createVirtualViewMatrix();
-    glMatrix.mat4.invert(inverseModelViewMatrix, modelViewMatrix);
-    
-    glMatrix.mat4.perspective(projectionMatrix, Math.PI / 4, gl.canvas.width / gl.canvas.height, 0.1, 10);
+  createVirtualViewMatrix();
+  glMatrix.mat4.invert(inverseModelViewMatrix, modelViewMatrix);
+  
+  //TODO: Remove this
+  glMatrix.mat4.perspective(projectionMatrix, Math.PI / 4, gl.canvas.width / gl.canvas.height, 0.1, 10);
 
-    let floatD = Math.tan(((cameraFOV / 2) / 180) * Math.PI);
-    intrinsicCamMatrix = createInCamMatrix(1400, 800, floatD);
-    glMatrix.mat4.invert(invIntrinsicCamMatrix, intrinsicCamMatrix);
-    
-    p1 = create4dProj(N, wF, modelViewMatrix);
-    glMatrix.mat4.invert(inverseProjectionMatrix, p1);
+  const floatD = Math.tan(((cameraFOV / 2) / 180) * Math.PI);
+  createInCamMatrix(1400, 800, floatD);
+  glMatrix.mat4.invert(invIntrinsicCamMatrix, intrinsicCamMatrix);
+  
+  const p1 = create4dProj(N, wF, modelViewMatrix);
+  glMatrix.mat4.invert(inverseProjectionMatrix, p1);
 
-    A = create4dProj(N, wA, modelViewMatrix);
-    glMatrix.mat4.invert(inverseProjectionAMatrix, A);
 }
 
-function createArrayView(){
-  let arrViewMat4s = imgsData.map(item => {
-    let arrCamPosition = glMatrix.vec3.fromValues(item.u, item.v, 5);
-    let arrCamTarget = glMatrix.vec3.fromValues(item.u, item.v, 0);
-    let arrModelViewMatrix = glMatrix.mat4.create();
-
-    glMatrix.mat4.lookAt(arrModelViewMatrix, arrCamPosition, arrCamTarget, upVector);
-
-    return arrModelViewMatrix ;
-  });
-
-  let flatArrViewMats = [];
-  arrViewMat4s .forEach(m => {
-    for (let i = 0; i < 16; i++) {
-      flatArrViewMats.push(m[i]);
-    }
-  });
-  return flatArrViewMats;
-}
-
-function createArrayCameraProj(normal, wF){
-  let arrProjMat4s = imgsData.map(item => {
-    let arrCamPosition = glMatrix.vec3.fromValues(item.u, item.v, 5);
-    let arrCamTarget = glMatrix.vec3.fromValues(item.u, item.v, 0);
-    let arrModelViewMatrix = glMatrix.mat4.create();
-
-    glMatrix.mat4.lookAt(arrModelViewMatrix, arrCamPosition, arrCamTarget, upVector);
-    return create4dProj(normal, wF, arrModelViewMatrix);
-  });
-
-  let flatArrProjMats = [];
-  arrProjMat4s.forEach(m => {
-    for (let i = 0; i < 16; i++) {
-      flatArrProjMats.push(m[i]);
-    }
-  });
-  return flatArrProjMats
-}
+// --------------------Array-Cameras---------------------------
 
 function createArrayCameraUV(){
-  let  flatArrUvs = [];
+  arrUVs = [];
   imgsData.map(item => {
-    flatArrUvs.push(parseFloat(item.u));
-    flatArrUvs.push(parseFloat(item.v));
+    arrUVs.push(parseFloat(item.u));
+    arrUVs.push(parseFloat(item.v));
   });
-  return flatArrUvs;
 }
 
-function initArrayCameras (){
-    arrViewMats = createArrayView(N, wF);
-    gl.uniformMatrix4fv(shaderProgram.arrViewUniform, false, arrViewMats);
+function createHTMatrix(){
+  const PiKi = glMatrix.mat4.create();
+  const ViPiKi = glMatrix.mat4.create();
+  
+  glMatrix.mat4.multiply(PiKi, inverseProjectionMatrix, invIntrinsicCamMatrix);
+  glMatrix.mat4.multiply(ViPiKi, inverseModelViewMatrix, PiKi);
 
-    arrProjMats = createArrayCameraProj(N, wF);
-    gl.uniformMatrix4fv(shaderProgram.arrProjUniform, false, arrProjMats);
+  const HTMat4s = imgsData.map(item => {
+    const arrCamPosition = glMatrix.vec3.fromValues(item.u, item.v, wA[2]);
+    const arrCamTarget = glMatrix.vec3.fromValues(item.u, item.v, wA[2]-1);
+    const arrModelViewMatrix = glMatrix.mat4.create();
 
-    arrUVs = createArrayCameraUV();
-    gl.uniform2fv(shaderProgram.arrUvUniform, arrUVs);
+    glMatrix.mat4.lookAt(arrModelViewMatrix, arrCamPosition, arrCamTarget, upVector);
+    const  arrProjMat =  create4dProj(N, wF, arrModelViewMatrix);
 
+    const VViPiKi = glMatrix.mat4.create();
+    const PVViPiKi = glMatrix.mat4.create();
+    const KPVViPiKi = glMatrix.mat4.create();
+
+    
+    glMatrix.mat4.multiply(VViPiKi, arrModelViewMatrix, ViPiKi);
+    glMatrix.mat4.multiply(PVViPiKi, arrProjMat, VViPiKi);
+    glMatrix.mat4.multiply(KPVViPiKi, intrinsicCamMatrix, PVViPiKi);
+
+    return KPVViPiKi ;
+  });
+
+  arrHTMatrices = []
+  HTMat4s.forEach(m => {
+    for (let i = 0; i < 16; i++) {
+      arrHTMatrices.push(m[i]);
+    }
+  });
 }
 
-function updateCamera() {
-    createVirtualViewMatrix();
-    glMatrix.mat4.invert(inverseModelViewMatrix, modelViewMatrix);
+function createAMatrix(){
+  const PAi = glMatrix.mat4.create();
+  const PA = create4dProj(N, wA, modelViewMatrix);
+  glMatrix.mat4.invert(PAi, PA);
 
-    const p1 = create4dProj(N, wF, modelViewMatrix);
-    glMatrix.mat4.invert(inverseProjectionMatrix, p1);
-
-    A = create4dProj(N, wA, modelViewMatrix);
-    glMatrix.mat4.invert(inverseProjectionAMatrix, A);
+  
+  const PAiKi = glMatrix.mat4.create();
+  
+  glMatrix.mat4.multiply(PAiKi, PAi, invIntrinsicCamMatrix);
+  glMatrix.mat4.multiply(A, inverseModelViewMatrix, PAiKi);
 }
+
+// --------------------Update-Uniforms-------------------------
+
+function updateUniforms() {
+  initCamera();
+  createHTMatrix();
+  createAMatrix();
+
+
+  gl.uniformMatrix4fv(shaderProgram.modelViewMatrixUniform, false, modelViewMatrix);
+  gl.uniformMatrix4fv(shaderProgram.projectionMatrixUniform, false, projectionMatrix);
+
+  gl.uniformMatrix4fv(shaderProgram.arrHTMUniform, false, arrHTMatrices);
+  gl.uniform2fv(shaderProgram.arrUvUniform, arrUVs);
+
+  gl.uniformMatrix4fv(shaderProgram.paUniform, false, A);
+}
+
+// --------------------Handle-Inputs---------------------------
 
 function handleMouseDown(event) {
     mouseDown = true;
@@ -413,11 +400,11 @@ function handleMouseMove(event) {
 
     updateOrbitalCamera(angleX, angleY, distance);
   } else {
-    cameraPosition[0] += deltaX * 0.01;
+    cameraPosition[0] -= deltaX * 0.01;
     cameraPosition[1] += deltaY * 0.01;
   }
 
-  updateCamera();
+  updateUniforms();
   render();
 }
 
@@ -431,7 +418,7 @@ function handleMouseWheel(event) {
     cameraPosition[2] += event.deltaY * 0.5;
   }
 
-  updateCamera();
+  updateUniforms();
   render();
 }
 
@@ -460,7 +447,7 @@ function setCameraPosition() {
       distance = Math.sqrt((x_f * x_f) + (y_f * y_f) + (d_z * d_z));
     };
     
-    updateCamera();
+    updateUniforms();
     render();
 
   } else {
@@ -480,8 +467,7 @@ function setFPosition() {
       targetPosition = glMatrix.vec3.fromValues(0,0,F_f);
       
       
-      updateCamera();
-      initArrayCameras();
+      updateUniforms();
       render();
 
 
@@ -497,7 +483,7 @@ function handleArrowKey(){
   if (keys.ArrowDown){
     wF[2] -= 5;
   }
-  updateCamera();
+  updateUniforms();
   render();
 }
 
@@ -516,20 +502,14 @@ function handleKeyUp(event){
 
 function handleFOVSlider(){
   cameraFOV = document.getElementById('slider').value;
-      
-  let floatD = Math.tan(((cameraFOV / 2) / 180) * Math.PI);
-  intrinsicCamMatrix = createInCamMatrix(1400, 800, floatD);
-  glMatrix.mat4.invert(invIntrinsicCamMatrix, intrinsicCamMatrix);
-
-  gl.uniformMatrix4fv(shaderProgram.kUniform, false, intrinsicCamMatrix);
-  gl.uniformMatrix4fv(shaderProgram.kiUniform, false, invIntrinsicCamMatrix);
+  updateUniforms();
 
   render();
 }
 
 function handleCheckBox(){
   cameraMode = document.getElementById('checkbox').checked;
-  updateCamera();
+  updateUniforms();
   render();
 }
 
@@ -558,13 +538,6 @@ function updateText(){
 function render() {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    gl.uniformMatrix4fv(shaderProgram.modelViewMatrixUniform, false, modelViewMatrix);
-    gl.uniformMatrix4fv(shaderProgram.projectionMatrixUniform, false, projectionMatrix);
-
-    gl.uniformMatrix4fv(shaderProgram.vkiUniform, false, inverseModelViewMatrix);
-    gl.uniformMatrix4fv(shaderProgram.pkiUniform, false, inverseProjectionMatrix);
-    gl.uniformMatrix4fv(shaderProgram.paUniform, false, inverseProjectionAMatrix);
-
     gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
 
     updateText();
@@ -574,9 +547,14 @@ function main() {
     canvas = document.getElementById("glcanvas");
     initWebGL(canvas);
     initShaders();
+
     initBuffers();
-    initCamera();
-    initArrayCameras();
+    createTextureArray();
+
+    createArrayCameraUV();
+  
+    updateUniforms();
+    
     setupEventListeners();
 
     gl.clearColor(0.0, 0.0, 0.0, 1.0);
