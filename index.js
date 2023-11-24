@@ -114,7 +114,8 @@ function initShaders() {
 
           vec4 w_a = A * p_k;
           vec3 tex = vec3(0.0, 0.0, 0.0);
-          float validPixelCount = 0.0;
+          bool first = true;
+          float min_d = 0.0;
 
           for (int i = 0; i < ${imgsData.length}; i++){
             vec4 p_i = arr_HTM[i] * p_k;
@@ -124,13 +125,17 @@ function initShaders() {
             float d = ((w_x * w_x) + (w_y * w_y));
 
             vec2 uv = vec2((p_i.x + 1.0) / 2.0, (1.0 - p_i.y) / 2.0);
+
             if (uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0) {
-              float contribution = (1.0 / (1.0 + (d*d)));
-              tex += vec3(texture(uSampler, vec3(uv, i)).rgb) * contribution;
-              validPixelCount += contribution;
+
+              if (first || d < min_d) {
+                tex = vec3(texture(uSampler, vec3(uv, i)).rgb);
+                min_d = d;
+                first = false;
+              }
             }
           }
-          fragColor = vec4(tex, 1.0) / validPixelCount; 
+          fragColor = vec4(tex, 1.0); 
         }
     `;
   
