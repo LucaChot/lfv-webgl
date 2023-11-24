@@ -108,13 +108,15 @@ function initShaders() {
         in vec2 vUv;
         out vec4 fragColor;
 
-        void main(void) {
-          vec4 p_k = vec4(vUv.x * 2.0 - 1.0, 1.0 - 2.0 * vUv.y,  0 , 1);
 
+        bool inGrid(vec2 w){
+          return w.x < ${maxU} && w.x > ${minU} && w.y < ${maxV} && w.y > ${minV};
+        }
 
-          vec4 w_a = A * p_k;
+        vec3 nearestArrCamera(vec4 p_k, vec2 w_a){
           vec3 tex = vec3(0.0, 0.0, 0.0);
-          float validPixelCount = 0.0;
+          bool first = true;
+          float min_d = 0.0;
 
           for (int i = 0; i < ${imgsData.length}; i++){
             vec4 p_i = arr_HTM[i] * p_k;
@@ -124,13 +126,75 @@ function initShaders() {
             float d = ((w_x * w_x) + (w_y * w_y));
 
             vec2 uv = vec2((p_i.x + 1.0) / 2.0, (1.0 - p_i.y) / 2.0);
+
             if (uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0) {
-              float contribution = (1.0 / (1.0 + (d*d)));
-              tex += vec3(texture(uSampler, vec3(uv, i)).rgb) * contribution;
-              validPixelCount += contribution;
+
+              if (first || d < min_d) {
+                tex = vec3(texture(uSampler, vec3(uv, i)).rgb);
+                min_d = d;
+                first = false;
+              }
             }
           }
-          fragColor = vec4(tex, 1.0) / validPixelCount; 
+          return tex;
+        }
+
+        vec3 interpolate(float x, float x1, float x2, vec3 f1, vec3 f2){
+          float a = (x2 - x) / (x2 - x1);
+          float b = (x - x1) / (x2 - x1);
+          return a * f1 + b * f2;
+        }
+
+        vec3 bInterpolate(vec2 uv, vec2 w_a, int i){
+          //Interpolate along x-axis first
+          vec3 f1 = interpolate(w_a.x, arr_uv[i-1].x, arr_uv[i-1-${arrHeight}].x,
+            vec3(texture(uSampler,vec3(uv, (i-1))).rgb),
+            vec3(texture(uSampler,vec3(uv, (i-1-${arrHeight}))).rgb));
+
+          vec3 f2 = interpolate(w_a.x, arr_uv[i].x, arr_uv[i-${arrHeight}].x,
+            vec3(texture(uSampler,vec3(uv, (i))).rgb),
+            vec3(texture(uSampler,vec3(uv, (i-${arrHeight}))).rgb));
+
+          //Interpolate along y-axis
+          return interpolate(w_a.y, arr_uv[i].y, arr_uv[i-1].y,
+            vec3(texture(uSampler,vec3(uv, (i))).rgb),
+            vec3(texture(uSampler,vec3(uv, (i-1))).rgb));
+        }
+
+
+        vec3 bilinearInterpolate(vec4 p_k, vec2 w_a) {
+          vec3 tex = vec3(0.0, 0.0, 0.0);
+          for (int i = ${arrHeight} + 1; i < ${imgsData.length}; i++){
+
+            // Don't check camera's on the top border
+            if (i % ${arrHeight} == 0) continue;
+            // Only apply bilinear interpolation once bottom left corner is found
+            if (w_a.x < arr_uv[i].x || w_a.y < arr_uv[i].y) continue;
+
+            vec4 p_i = arr_HTM[i] * p_k;
+            vec2 uv = vec2((p_i.x + 1.0) / 2.0, (1.0 - p_i.y) / 2.0);
+
+            // If uv out of camera image continue
+            if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) continue;
+
+            tex = bInterpolate(uv, w_a, i);
+          }
+          return tex;
+        }
+
+        void main(void) {
+          vec4 p_k = vec4(vUv.x * 2.0 - 1.0, 1.0 - 2.0 * vUv.y,  0 , 1);
+          vec4 w_a = A * p_k;
+          vec2 w = w_a.xy;
+
+          vec3 tex;
+
+          if(!inGrid(w)){
+            tex = nearestArrCamera(p_k, w);
+          } else {
+            tex = bilinearInterpolate(p_k, w);
+          }
+          fragColor = vec4(tex, 1.0); 
         }
     `;
   
