@@ -139,26 +139,36 @@ function initShaders() {
           return tex;
         }
 
+        vec2 getUV(vec4 p_k, int i) {
+            vec4 p_i = arr_HTM[i] * p_k;
+            return vec2((p_i.x + 1.0) / 2.0, (1.0 - p_i.y) / 2.0);
+        }
+
         vec3 interpolate(float x, float x1, float x2, vec3 f1, vec3 f2){
           float a = (x2 - x) / (x2 - x1);
           float b = (x - x1) / (x2 - x1);
           return a * f1 + b * f2;
         }
 
-        vec3 bInterpolate(vec2 uv, vec2 w_a, int i){
+        vec3 bInterpolate(vec4 p_k, vec2 w_a, int i){
           //Interpolate along x-axis first
-          vec3 f1 = interpolate(w_a.x, arr_uv[i-1].x, arr_uv[i-1-${arrHeight}].x,
-            vec3(texture(uSampler,vec3(uv, (i-1))).rgb),
-            vec3(texture(uSampler,vec3(uv, (i-1-${arrHeight}))).rgb));
+          vec2 p_1 = getUV(p_k, i);
+          vec2 p_2 = getUV(p_k, i-1);
+          vec2 p_3 = getUV(p_k, i-${arrHeight});
+          vec2 p_4 = getUV(p_k, i-1-${arrHeight});
+          
+          vec3 f1 = interpolate(w_a.x, arr_uv[i].x, arr_uv[i-${arrHeight}].x,
+            vec3(texture(uSampler,vec3(p_1, (i))).rgb),
+            vec3(texture(uSampler,vec3(p_3, (i-${arrHeight}))).rgb));
 
-          vec3 f2 = interpolate(w_a.x, arr_uv[i].x, arr_uv[i-${arrHeight}].x,
-            vec3(texture(uSampler,vec3(uv, (i))).rgb),
-            vec3(texture(uSampler,vec3(uv, (i-${arrHeight}))).rgb));
+          vec3 f2 = interpolate(w_a.x, arr_uv[i-1].x, arr_uv[i-1-${arrHeight}].x,
+            vec3(texture(uSampler,vec3(p_2, (i-1))).rgb),
+            vec3(texture(uSampler,vec3(p_4, (i-1-${arrHeight}))).rgb));
 
           //Interpolate along y-axis
           return interpolate(w_a.y, arr_uv[i].y, arr_uv[i-1].y,
-            vec3(texture(uSampler,vec3(uv, (i))).rgb),
-            vec3(texture(uSampler,vec3(uv, (i-1))).rgb));
+            f1,
+            f2);
         }
 
 
@@ -177,7 +187,7 @@ function initShaders() {
             // If uv out of camera image continue
             if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) continue;
 
-            tex = bInterpolate(uv, w_a, i);
+            tex = bInterpolate(p_k, w_a, i);
           }
           return tex;
         }
