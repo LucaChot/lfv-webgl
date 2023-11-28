@@ -35,15 +35,11 @@ let distance = 6;
 
 const modelViewMatrix = glMatrix.mat4.create();
 const projectionMatrix = glMatrix.mat4.create();
+const intrinsicCamMatrix = glMatrix.mat4.create();
 
 const N = glMatrix.vec4.fromValues(0,0,1,1);
 let wF = glMatrix.vec4.fromValues(0,0,0,1);
 const wA = glMatrix.vec4.fromValues(0,0,5,1);
-
-const intrinsicCamMatrix = glMatrix.mat4.create();
-const invIntrinsicCamMatrix = glMatrix.mat4.create();
-const inverseModelViewMatrix = glMatrix.mat4.create();
-const inverseProjectionMatrix = glMatrix.mat4.create();
 
 let arrUVs = [];
 
@@ -227,14 +223,16 @@ async function createTextureArray(){
 // --------------------Camera-Matrix-Functions-----------------
 
 function createVirtualViewMatrix(){
+  const V = glMatrix.mat4.create();
   if(!cameraMode){
-    glMatrix.mat4.lookAt(modelViewMatrix, cameraPosition, targetPosition, upVector);
+    glMatrix.mat4.lookAt(V, cameraPosition, targetPosition, upVector);
   } else{
     let forward = glMatrix.vec3.create();
     glMatrix.vec3.copy(forward, cameraPosition);
     forward[2] = forward[2] - 1;
-    glMatrix.mat4.lookAt(modelViewMatrix, cameraPosition, forward, upVector);
+    glMatrix.mat4.lookAt(V, cameraPosition, forward, upVector);
   }
+  return V;
 }
 
 function create4dProj(normal, point, viewMatrix){
@@ -261,30 +259,37 @@ function create4dProj(normal, point, viewMatrix){
 
 function createInCamMatrix(width, height, projD){
   aspect = width / height
-  glMatrix.mat4.copy(intrinsicCamMatrix, glMatrix.mat4.fromValues(
-    1 / (aspect * projD), 0, 0, 0,
-    0, 1 / projD, 0, 0,
+  return glMatrix.mat4.fromValues(
+    -1 / (aspect * projD), 0, 0, 0,
+    0, -1 / projD, 0, 0,
     0, 0, 1, 0,
     0, 0, 0, 1
-  ));
+  );
 }
 
 // --------------------Virtual-Camera--------------------------
 
 function initCamera() {
-  createVirtualViewMatrix();
-  glMatrix.mat4.invert(inverseModelViewMatrix, modelViewMatrix);
+  const V = createVirtualViewMatrix();
+  glMatrix.mat4.copy(modelViewMatrix, V);
   
   //TODO: Remove this
-  glMatrix.mat4.perspective(projectionMatrix, Math.PI / 4, gl.canvas.width / gl.canvas.height, 0.1, 10);
+  //glMatrix.mat4.perspective(projectionMatrix, Math.PI / 4, gl.canvas.width / gl.canvas.height, 0.1, 10);
 
   const floatD = Math.tan(((cameraFOV / 2) / 180) * Math.PI);
-  createInCamMatrix(1400, 800, floatD);
-  glMatrix.mat4.invert(invIntrinsicCamMatrix, intrinsicCamMatrix);
+  const K = createInCamMatrix(1024, 1024, floatD);
+  glMatrix.mat4.copy(intrinsicCamMatrix, K);
   
   const p1 = create4dProj(N, wF, modelViewMatrix);
-  glMatrix.mat4.invert(inverseProjectionMatrix, p1);
+  glMatrix.mat4.copy(projectionMatrix, p1);
 
+  console.log(modelViewMatrix);
+  //console.log(inverseModelViewMatrix);
+  console.log(projectionMatrix);
+  //console.log(inverseProjectionMatrix);
+
+  console.log(intrinsicCamMatrix);
+  //console.log(invIntrinsicCamMatrix);
 }
 
 // --------------------Array-Cameras---------------------------
@@ -298,11 +303,15 @@ function createArrayCameraUV(){
 }
 
 function createHTMatrix(){
-  const PiKi = glMatrix.mat4.create();
   const ViPiKi = glMatrix.mat4.create();
+  const PV = glMatrix.mat4.create();
+  const KPV = glMatrix.mat4.create();
   
-  glMatrix.mat4.multiply(PiKi, inverseProjectionMatrix, invIntrinsicCamMatrix);
-  glMatrix.mat4.multiply(ViPiKi, inverseModelViewMatrix, PiKi);
+  glMatrix.mat4.multiply(PV, projectionMatrix, modelViewMatrix);
+  glMatrix.mat4.multiply(KPV, intrinsicCamMatrix, PV);
+  glMatrix.mat4.invert(ViPiKi, KPV);
+  console.log(ViPiKi)
+
 
   const HTMat4s = imgsData.map(item => {
     const arrCamPosition = glMatrix.vec3.fromValues(item.u, item.v, wA[2]);
@@ -333,15 +342,14 @@ function createHTMatrix(){
 }
 
 function createAMatrix(){
-  const PAi = glMatrix.mat4.create();
-  const PA = create4dProj(N, wA, modelViewMatrix);
-  glMatrix.mat4.invert(PAi, PA);
+  const P_A = create4dProj(N, wA, modelViewMatrix);
+  const P_AV = glMatrix.mat4.create();
+  glMatrix.mat4.multiply(P_AV, P_A, modelViewMatrix);
+  
+  const KP_AV = glMatrix.mat4.create();
+  glMatrix.mat4.multiply(KP_AV, intrinsicCamMatrix, P_AV);
 
-  
-  const PAiKi = glMatrix.mat4.create();
-  
-  glMatrix.mat4.multiply(PAiKi, PAi, invIntrinsicCamMatrix);
-  glMatrix.mat4.multiply(A, inverseModelViewMatrix, PAiKi);
+  glMatrix.mat4.invert(A, KP_AV);
 }
 
 // --------------------Update-Uniforms-------------------------
