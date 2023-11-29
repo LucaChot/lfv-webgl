@@ -1,4 +1,5 @@
 // app.js
+// u is up and v is left
 let gl;
 let shaderProgram;
 let canvas;
@@ -119,7 +120,9 @@ function initShaders() {
             float w_y = w_a.y - arr_uv[i].y;
             float d = ((w_x * w_x) + (w_y * w_y));
 
-            vec2 uv = vec2((p_i.x + 1.0) / 2.0, (1.0 - p_i.y) / 2.0);
+            vec2 tuv = vec2(p_i.x / p_i.w, p_i.y / p_i.w);
+
+            vec2 uv = vec2((tuv.x + 1.0) / 2.0, (1.0 - tuv.y) / 2.0);
             if (uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0) {
               float contribution = (1.0 / (1.0 + (d*d)));
               tex += vec3(texture(uSampler, vec3(uv, i)).rgb) * contribution;
@@ -297,8 +300,8 @@ function initCamera() {
 function createArrayCameraUV(){
   arrUVs = [];
   imgsData.map(item => {
+    arrUVs.push(parseFloat(-item.v));
     arrUVs.push(parseFloat(item.u));
-    arrUVs.push(parseFloat(item.v));
   });
 }
 
@@ -314,8 +317,8 @@ function createHTMatrix(){
 
 
   const HTMat4s = imgsData.map(item => {
-    const arrCamPosition = glMatrix.vec3.fromValues(item.u, item.v, wA[2]);
-    const arrCamTarget = glMatrix.vec3.fromValues(item.u, item.v, wA[2]-1);
+    const arrCamPosition = glMatrix.vec3.fromValues(-item.v, item.u, wA[2]);
+    const arrCamTarget = glMatrix.vec3.fromValues(-item.v, item.u, wA[2]-1);
     const arrModelViewMatrix = glMatrix.mat4.create();
 
     glMatrix.mat4.lookAt(arrModelViewMatrix, arrCamPosition, arrCamTarget, upVector);
