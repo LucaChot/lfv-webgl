@@ -17,6 +17,8 @@ let lastMouseY = 0;
 let keys = {
   ArrowUp: false,
   ArrowDown: false,
+  ArrowLeft: false,
+  ArrowRight: false,
 };
 
 // --------------------Camera----------------------------------
@@ -390,6 +392,11 @@ function updateOrbitalCamera(angleX, angleY, distance){
     cameraPosition[2] = targetPosition[2] + distance * Math.cos(angleX);
 }
 
+function clampCameraPosition() {
+  cameraPosition[0] = Math.max(Math.min(cameraPosition[0], maxU), minU);
+  cameraPosition[1] = Math.max(Math.min(cameraPosition[1], maxV), minV);
+}
+
 function handleMouseMove(event) {
   const rect = canvas.getBoundingClientRect();
   const mouseX = event.clientX - rect.left;
@@ -415,18 +422,20 @@ function handleMouseMove(event) {
     cameraPosition[1] += deltaY * 0.01;
   }
 
+  clampCameraPosition();
   updateUniforms();
   render();
 }
 
 function handleMouseWheel(event) {
   if(!cameraMode){
+    wF[2] -= event.deltaY * 0.1;
     distance += event.deltaY * 0.1;
 
     updateOrbitalCamera(angleX, angleY, distance);
   }
   else{
-    cameraPosition[2] += event.deltaY * 0.5;
+    wF[2] -= event.deltaY * 0.5;
   }
 
   updateUniforms();
@@ -458,6 +467,7 @@ function setCameraPosition() {
       distance = Math.sqrt((x_f * x_f) + (y_f * y_f) + (d_z * d_z));
     };
     
+    clampCameraPosition();
     updateUniforms();
     render();
 
@@ -489,11 +499,18 @@ function setFPosition() {
 
 function handleArrowKey(){
   if (keys.ArrowUp){
-    wF[2] += 5;
+    cameraPosition[1] += 2;
   }
   if (keys.ArrowDown){
-    wF[2] -= 5;
+    cameraPosition[1] -= 2;
   }
+  if (keys.ArrowLeft){
+    cameraPosition[0] -= 2;
+  }
+  if (keys.ArrowRight){
+    cameraPosition[0] += 2;
+  }
+  clampCameraPosition();
   updateUniforms();
   render();
 }
