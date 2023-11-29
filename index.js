@@ -25,6 +25,8 @@ let keys = {
 
 let cameraMode = false;
 let cameraFOV = 90;
+let maxAperture = 2 * (1 + Math.max(-minU, maxU, -minV, maxV))
+let aperture = 0;
 
 let cameraPosition = glMatrix.vec3.fromValues(0, 0, 6);
 let targetPosition = glMatrix.vec3.fromValues(0, 0, 0);
@@ -103,6 +105,7 @@ function initShaders() {
         uniform mat4 arr_HTM[${imgsData.length}];
         uniform vec2 arr_uv[${imgsData.length}];
         uniform mat4 A;
+        uniform float aperture;
 
         in vec2 vUv;
         out vec4 fragColor;
@@ -112,15 +115,18 @@ function initShaders() {
 
 
           vec4 w_a = A * p_k;
+          vec2 w = vec2(w_a.x / w_a.w, w_a.y / w_a.w);
           vec3 tex = vec3(0.0, 0.0, 0.0);
           float validPixelCount = 0.0;
 
           for (int i = 0; i < ${imgsData.length}; i++){
             vec4 p_i = arr_HTM[i] * p_k;
 
-            float w_x = w_a.x - arr_uv[i].x;
-            float w_y = w_a.y - arr_uv[i].y;
+            float w_x = w.x - arr_uv[i].x;
+            float w_y = w.y - arr_uv[i].y;
             float d = ((w_x * w_x) + (w_y * w_y));
+
+            if (d > aperture * aperture) continue;
 
             vec2 tuv = vec2(p_i.x / p_i.w, p_i.y / p_i.w);
 
@@ -163,6 +169,8 @@ function initShaders() {
     shaderProgram.arrUvUniform = gl.getUniformLocation(shaderProgram, "arr_uv");
 
     shaderProgram.paUniform = gl.getUniformLocation(shaderProgram, "A");
+
+    shaderProgram.apertureUniform = gl.getUniformLocation(shaderProgram, "aperture");
 
     const samplerArrayLocation = gl.getUniformLocation(shaderProgram, 'uSampler');
     gl.uniform1i(samplerArrayLocation, 0);
@@ -372,6 +380,7 @@ function updateUniforms() {
   gl.uniform2fv(shaderProgram.arrUvUniform, arrUVs);
 
   gl.uniformMatrix4fv(shaderProgram.paUniform, false, A);
+  gl.uniform1f(shaderProgram.apertureUniform, aperture);
 }
 
 // --------------------Handle-Inputs---------------------------
@@ -529,7 +538,7 @@ function handleKeyUp(event){
 }
 
 function handleFOVSlider(){
-  cameraFOV = document.getElementById('slider').value;
+  aperture = document.getElementById('slider').value / 1000;
   updateUniforms();
 
   render();
@@ -550,6 +559,7 @@ function setupEventListeners() {
 
   document.addEventListener('keydown', handleKeyDown);
   document.addEventListener('keyup', handleKeyUp);
+  document.getElementById('slider').max = maxAperture * 1000;
   document.getElementById('slider').addEventListener('input', handleFOVSlider);
   document.getElementById('checkbox').addEventListener('change', handleCheckBox);
 }
@@ -559,7 +569,7 @@ function updateText(){
 
     document.getElementById("output").textContent= data;
     document.getElementById("position").textContent= cameraPosition;
-    document.getElementById('sliderValue').textContent = 'Selected FOV: ' + cameraFOV;
+    document.getElementById('sliderValue').textContent = 'Selected Aperture: ' + aperture;
     document.getElementById("plane").textContent = 'Plane Z: ' + wF[2];
 }
 
