@@ -7,6 +7,8 @@ let canvas;
 // --------------------Images----------------------------------
 
 let folderPath = "./imgs"
+let imgWidth = 1024;
+let imgHeight = 1024;
 
 // --------------------Inputs----------------------------------
 
@@ -19,14 +21,17 @@ let keys = {
   ArrowDown: false,
   ArrowLeft: false,
   ArrowRight: false,
+  Space: false,
+  Enter: false,
 };
 
 // --------------------Camera----------------------------------
 
 let cameraMode = false;
 let cameraFOV = 90;
-let maxAperture = 2 * (1 + Math.max(-minU, maxU, -minV, maxV))
+let maxAperture = 2 * (1 + Math.max(-minX, maxX, -minY, maxY))
 let aperture = 0;
+let arrcameraFOV = 90;
 
 let cameraPosition = glMatrix.vec3.fromValues(0, 0, 6);
 let targetPosition = glMatrix.vec3.fromValues(0, 0, 0);
@@ -41,10 +46,11 @@ let distance = 6;
 const modelViewMatrix = glMatrix.mat4.create();
 const projectionMatrix = glMatrix.mat4.create();
 const intrinsicCamMatrix = glMatrix.mat4.create();
+const arrIntrinsicCamMatrix = glMatrix.mat4.create();
 
 const N = glMatrix.vec4.fromValues(0,0,1,1);
-let wF = glMatrix.vec4.fromValues(0,0,0,1);
-const wA = glMatrix.vec4.fromValues(0,0,5,1);
+let wF = glMatrix.vec4.fromValues(0,0,-5,1);
+const wA = glMatrix.vec4.fromValues(0,0,0,1);
 
 let arrUVs = [];
 
@@ -132,9 +138,9 @@ function initShaders() {
 
             vec2 uv = vec2((tuv.x + 1.0) / 2.0, (1.0 - tuv.y) / 2.0);
             if (uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0) {
-              float contribution = (1.0 / (1.0 + (d*d)));
-              tex += vec3(texture(uSampler, vec3(uv, i)).rgb) * contribution;
-              validPixelCount += contribution;
+              float contribution = (1.0 / (1.0 + d));
+              tex += vec3(texture(uSampler, vec3(uv, i)).rgb);// * contribution;
+              validPixelCount += 1.0;// contribution;
             }
           }
           fragColor = vec4(tex, 1.0) / validPixelCount; 
@@ -224,10 +230,10 @@ async function createTextureArray(){
   gl.texParameteri( gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR );
   gl.texParameteri( gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR );
 
-  gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.RGBA8, 1400, 800, imgsData.length);
+  gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.RGBA8, imgWidth, imgHeight, imgsData.length);
 
   for (var i = 0; i < imgs.length; i++) {
-    gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0,0,0, i, 1400, 800,1, gl.RGBA, gl.UNSIGNED_BYTE, imgs[i]);
+    gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0,0,0, i, imgWidth, imgHeight,1, gl.RGBA, gl.UNSIGNED_BYTE, imgs[i]);
   }
 
   render();
@@ -286,23 +292,16 @@ function initCamera() {
   const V = createVirtualViewMatrix();
   glMatrix.mat4.copy(modelViewMatrix, V);
   
-  //TODO: Remove this
-  //glMatrix.mat4.perspective(projectionMatrix, Math.PI / 4, gl.canvas.width / gl.canvas.height, 0.1, 10);
-
   const floatD = Math.tan(((cameraFOV / 2) / 180) * Math.PI);
-  const K = createInCamMatrix(1024, 1024, floatD);
+  const K = createInCamMatrix(imgWidth, imgHeight, floatD);
   glMatrix.mat4.copy(intrinsicCamMatrix, K);
   
+  const arrFloatD = Math.tan(((arrcameraFOV / 2) / 180) * Math.PI);
+  const arrK = createInCamMatrix(imgWidth, imgHeight, arrFloatD);
+  glMatrix.mat4.copy(arrIntrinsicCamMatrix, arrK);
+
   const p1 = create4dProj(N, wF, modelViewMatrix);
   glMatrix.mat4.copy(projectionMatrix, p1);
-
-  console.log(modelViewMatrix);
-  //console.log(inverseModelViewMatrix);
-  console.log(projectionMatrix);
-  //console.log(inverseProjectionMatrix);
-
-  console.log(intrinsicCamMatrix);
-  //console.log(invIntrinsicCamMatrix);
 }
 
 // --------------------Array-Cameras---------------------------
@@ -310,8 +309,8 @@ function initCamera() {
 function createArrayCameraUV(){
   arrUVs = [];
   imgsData.map(item => {
-    arrUVs.push(parseFloat(-item.v));
-    arrUVs.push(parseFloat(item.u));
+    arrUVs.push(parseFloat(item.x));
+    arrUVs.push(parseFloat(item.y));
   });
 }
 
@@ -323,25 +322,33 @@ function createHTMatrix(){
   glMatrix.mat4.multiply(PV, projectionMatrix, modelViewMatrix);
   glMatrix.mat4.multiply(KPV, intrinsicCamMatrix, PV);
   glMatrix.mat4.invert(ViPiKi, KPV);
-  console.log(ViPiKi)
+  //console.log(ViPiKi)
 
 
   const HTMat4s = imgsData.map(item => {
-    const arrCamPosition = glMatrix.vec3.fromValues(-item.v, item.u, wA[2]);
-    const arrCamTarget = glMatrix.vec3.fromValues(-item.v, item.u, wA[2]-1);
+    const arrCamPosition = glMatrix.vec3.fromValues(item.x, item.y, wA[2]);
+    const arrCamTarget = glMatrix.vec3.fromValues(wF[0], wF[1], -400);
     const arrModelViewMatrix = glMatrix.mat4.create();
 
     glMatrix.mat4.lookAt(arrModelViewMatrix, arrCamPosition, arrCamTarget, upVector);
     const  arrProjMat =  create4dProj(N, wF, arrModelViewMatrix);
 
-    const VViPiKi = glMatrix.mat4.create();
-    const PVViPiKi = glMatrix.mat4.create();
+    const V = glMatrix.mat4.create();
+    const PV = glMatrix.mat4.create();
     const KPVViPiKi = glMatrix.mat4.create();
 
+    //console.log(arrModelViewMatrix);
+    //console.log(arrProjMat);
+    //console.log(intrinsicCamMatrix);
+
     
-    glMatrix.mat4.multiply(VViPiKi, arrModelViewMatrix, ViPiKi);
-    glMatrix.mat4.multiply(PVViPiKi, arrProjMat, VViPiKi);
-    glMatrix.mat4.multiply(KPVViPiKi, intrinsicCamMatrix, PVViPiKi);
+    glMatrix.mat4.multiply(PV, arrProjMat, arrModelViewMatrix);
+    glMatrix.mat4.multiply(KPV, intrinsicCamMatrix, PV);
+    //console.log(KPV);
+    //console.log(ViPiKi);
+    glMatrix.mat4.multiply(KPVViPiKi, KPV, ViPiKi);
+
+    console.log(KPVViPiKi);
 
     return KPVViPiKi ;
   });
@@ -402,8 +409,8 @@ function updateOrbitalCamera(angleX, angleY, distance){
 }
 
 function clampCameraPosition() {
-  cameraPosition[0] = Math.max(Math.min(cameraPosition[0], maxU), minU);
-  cameraPosition[1] = Math.max(Math.min(cameraPosition[1], maxV), minV);
+  cameraPosition[0] = Math.max(Math.min(cameraPosition[0], maxX), minX);
+  cameraPosition[1] = Math.max(Math.min(cameraPosition[1], maxY), minY);
 }
 
 function handleMouseMove(event) {
@@ -425,10 +432,10 @@ function handleMouseMove(event) {
     lastMouseX = event.clientX;
     lastMouseY = event.clientY;
 
-    updateOrbitalCamera(angleX, angleY, distance);
+    //updateOrbitalCamera(angleX, angleY, distance);
   } else {
-    cameraPosition[0] -= deltaX * 0.01;
-    cameraPosition[1] += deltaY * 0.01;
+    cameraPosition[0] -= deltaX * 0.001;
+    cameraPosition[1] += deltaY * 0.001;
   }
 
   clampCameraPosition();
@@ -441,7 +448,7 @@ function handleMouseWheel(event) {
     wF[2] -= event.deltaY * 0.1;
     distance += event.deltaY * 0.1;
 
-    updateOrbitalCamera(angleX, angleY, distance);
+    //updateOrbitalCamera(angleX, angleY, distance);
   }
   else{
     wF[2] -= event.deltaY * 0.5;
@@ -450,6 +457,7 @@ function handleMouseWheel(event) {
   updateUniforms();
   render();
 }
+
 
 function setCameraPosition() {
   // Get the value from the input box
@@ -507,17 +515,23 @@ function setFPosition() {
 }
 
 function handleArrowKey(){
-  if (keys.ArrowUp){
-    cameraPosition[1] += 2;
-  }
-  if (keys.ArrowDown){
-    cameraPosition[1] -= 2;
-  }
   if (keys.ArrowLeft){
     cameraPosition[0] -= 2;
   }
   if (keys.ArrowRight){
     cameraPosition[0] += 2;
+  }
+  if (keys.Enter){
+    cameraPosition[1] -= 2;
+  }
+  if (keys.Space){
+    cameraPosition[1] += 2;
+  }
+  if (keys.ArrowUp){
+    cameraPosition[2] -= 2;
+  }
+  if (keys.ArrowDown){
+    cameraPosition[2] += 2;
   }
   clampCameraPosition();
   updateUniforms();
@@ -529,12 +543,19 @@ function handleKeyDown(event){
     keys[event.key] = true;
     handleArrowKey();
   }
+  if (event.code === 'Space' || event.key === ' ') {
+    keys.Space = true;
+    handleArrowKey();
+  } 
 }
 
 function handleKeyUp(event){
   if (keys.hasOwnProperty(event.key)) {
     keys[event.key] = false;
   }
+  if (event.code === 'Space' || event.key === ' ') {
+    keys.Space = false;
+  } 
 }
 
 function handleFOVSlider(){
