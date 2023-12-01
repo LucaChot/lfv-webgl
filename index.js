@@ -166,7 +166,7 @@ function initShaders() {
           // Using smoothing
           tex += vec3(texture(uSampler, vec3(uv, i)).rgb) * contribution;
           validPixelCount += contribution;
-          // Without smoothing
+          // Without smoothing -> better refocusing effect
           //tex += vec3(texture(uSampler, vec3(uv, i)).rgb);
           //validPixelCount += 1.0;
         }
