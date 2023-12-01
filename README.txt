@@ -101,7 +101,8 @@ set the image width and height global variables in index.js. Then run the
 server (I did this using a console command library called 'servez').
 
 #Best Results#
-For a quick setup:
+For a quick setup I recommend you use Tarot Cards and Crystal Ball given by 
+Stanford University:
 1. Call parse-imgs.py and set width and height to 6
 2. Run the server
 3. Set Aperture to 12

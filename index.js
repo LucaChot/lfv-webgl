@@ -45,6 +45,12 @@ let angleX = 0;
 let angleY = 0;
 let distance = 6;
 
+// This -800 is an arbitrary point that gave the best results when used as 
+// a principle point for the data cameras due to images being rectified and
+// cropped
+// Changing this can give interesting effects
+let arrPrincipalPoint = -800;
+
 // --------------------Matrices-------------------------------- 
 
 const modelViewMatrix = glMatrix.mat4.create();
@@ -128,32 +134,44 @@ function initShaders() {
     out vec4 fragColor;
 
     void main(void) {
+      // Convert texture coordinates to camera pixel point
       vec4 p_k = vec4(vUv.x * 2.0 - 1.0, 1.0 - 2.0 * vUv.y,  0 , 1);
 
 
+      // Get coordinate in data camera plane
       vec4 w_a = A * p_k;
       vec2 w = vec2(w_a.x / w_a.w, w_a.y / w_a.w);
       vec3 tex = vec3(0.0, 0.0, 0.0);
       float validPixelCount = 0.0;
 
       for (int i = 0; i < ${imgsData.length}; i++){
+        // Get data camera pixel
         vec4 p_i = arr_HTM[i] * p_k;
 
         float w_x = w.x - arr_xy[i].x;
         float w_y = w.y - arr_xy[i].y;
         float d = ((w_x * w_x) + (w_y * w_y));
 
+        // Check if light ray is outside aperture
         if (d > aperture * aperture) continue;
 
         vec2 tuv = vec2(p_i.x / p_i.w, p_i.y / p_i.w);
 
+        // Convert coordinate to texture coordinate
         vec2 uv = vec2((tuv.x + 1.0) / 2.0, (1.0 - tuv.y) / 2.0);
+        // Check if pixel is inside the data camera image
         if (uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0) {
+          // Add pixel colour and contribution
           float contribution = (1.0 / (1.0 + d));
-          tex += vec3(texture(uSampler, vec3(uv, i)).rgb);// * contribution;
-          validPixelCount += 1.0;// contribution;
+          // Using smoothing
+          tex += vec3(texture(uSampler, vec3(uv, i)).rgb) * contribution;
+          validPixelCount += contribution;
+          // Without smoothing
+          //tex += vec3(texture(uSampler, vec3(uv, i)).rgb);
+          //validPixelCount += 1.0;
         }
       }
+      // Divide by total contribution
       fragColor = vec4(tex, 1.0) / validPixelCount; 
     }
   `;
@@ -357,7 +375,9 @@ function createHTMatrix(){
 
   const HTMat4s = imgsData.map(item => {
     const arrCamPosition = glMatrix.vec3.fromValues(item.x, item.y, wA[2]);
-    const arrCamTarget = glMatrix.vec3.fromValues(wF[0], wF[1], -800);
+    // If you replace arrPrincipalPoint with wA[2]-1 then we set it so that 
+    // the data cameras face perpendicular to focal plane
+    const arrCamTarget = glMatrix.vec3.fromValues(wF[0], wF[1], arrPrincipalPoint);
     const arrModelViewMatrix = glMatrix.mat4.create();
 
     glMatrix.mat4.lookAt(arrModelViewMatrix, arrCamPosition, arrCamTarget, upVector);
