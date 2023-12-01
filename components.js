@@ -6,6 +6,7 @@ xyzComponent.id = 'xyz';
 let orbitalComponent = document.createElement('div');
 orbitalComponent.id = 'orbital';
 
+// --------------------Create-XYZ-Display----------------------
 
 function createXYZControls(){
   // Creates the inputs for X, Y, Z coordinates of the camera
@@ -36,6 +37,8 @@ function createXYZControls(){
   outputElement.id = "output";
   xyzComponent.appendChild(outputElement);
 }
+
+// --------------------Create-Orbital-Display------------------
 
 // Orbital control has two divs
 // 1st for coordinate input and display
@@ -95,6 +98,8 @@ function createOrbitalControls(){
 
   orbitalComponent.appendChild(secondDiv);
 }
+
+// --------------------Init-+-Update---------------------------
 
 // Creates both components and attaches the XYZ component first
 function initComponents(){
