@@ -432,11 +432,15 @@ function clampCameraPosition() {
   cameraPosition[1] = Math.max(Math.min(cameraPosition[1], maxY), minY);
 }
 
+// --------------------Render----------------------------------
+
 // Renders the seen by drawing the triangles making up the quad
 function render() {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
 }
+
+// --------------------Main------------------------------------
 
 function main() {
     initComponents();

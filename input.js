@@ -222,9 +222,9 @@ function setFPosition() {
     }
 }
 
-// --------------------FOV-Slider------------------------------
+// --------------------Aperture-Slider-------------------------
 
-function handleFOVSlider(){
+function handleApertureSlider(){
   aperture = document.getElementById('slider').value / 1000;
 
   updateUniforms();
@@ -232,7 +232,7 @@ function handleFOVSlider(){
   updateComponents();
 }
 
-// --------------------Setup-Input-Functions-------------------
+// --------------------Setup-Event-Handlers--------------------
 
 function setupEventListeners() {
   document.getElementById('checkbox').addEventListener('change', handleCheckBox);
@@ -246,6 +246,6 @@ function setupEventListeners() {
   document.addEventListener('keyup', handleKeyUp);
 
   document.getElementById('slider').max = maxAperture * 1000; // * 1000 allows for float values
-  document.getElementById('slider').addEventListener('input', handleFOVSlider);
+  document.getElementById('slider').addEventListener('input', handleApertureSlider);
 }
 
