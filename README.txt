@@ -99,3 +99,20 @@ the number of imgs from the centre you would like (E.g. width and height set to
 imgs.js which will contain the image data required for the script. In addition, 
 set the image width and height global variables in index.js. Then run the 
 server (I did this using a console command library called 'servez').
+
+#Best Results#
+For a quick setup:
+1. Call parse-imgs.py and set width and height to 6
+2. Run the server
+3. Set Aperture to 12
+4. Set the focal point Z to -600
+5. Scroll to move the plane around or use arrows to move camera
+6. Select Orbital and set orbital centre Z equal to focal point -Z
+7. Move the camera using mouse
+
+#Current Issues#
+1. Shader memory not large enough to handle all images
+2. When setting width and height to 7 with parse-imgs.py, running the server 
+   and setting the aperture to max, artefacts appear as the focal plane is moved
+   away from the camera.
+
