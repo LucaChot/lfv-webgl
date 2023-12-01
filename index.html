@@ -7,34 +7,23 @@
   </head>
 
   <body>
-    <div>
-      <input type="number" id="inputX" placeholder="X">
-      <input type="number" id="inputY" placeholder="Y">
-      <input type="number" id="inputZ" placeholder="Z">
-      
-      <button onclick="setCameraPosition()">Update</button>
-      <label for="checkbox">Orbital/XYZ:</label>
-      <input type="checkbox" id="checkbox">
-    </div>
+    <label for="checkbox">Orbital:</label>
+    <input type="checkbox" id="checkbox">
     <div>
       <input type="number" id="inputF" placeholder="F">
-      <button onclick="setFPosition()">Update</button>
-      <p id="plane">Plane Z: 0</p>
+      <button onclick="setFPosition()">Enter</button>
+      <span id="plane">Plane Z: 0</span>
     </div>
     <div>
       <input type="range" id="slider" name="slider" min="0" value="0">
-      <p id="sliderValue">Selected FOV: 90</p>
+      <span id="sliderValue">Selected Aperture: 0</span>
     </div>
-    <div id="output"></div>
-    <div id="position"></div>
-
     <canvas id="glcanvas" width="1024" height="1024" />
-
-    <img id="Tex" src="img.png" width="0" height="0"></img>
   </body>
 
-  <div id="imageContainer"></div>
   <script src="gl-matrix.js"></script>
   <script src="imgs.js"></script>
+  <script src="input.js"></script>
+  <script src="components.js"></script>
   <script src="index.js"></script>
 </html>

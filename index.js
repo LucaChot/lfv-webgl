@@ -1,12 +1,13 @@
 // app.js
-// u is up and v is left
 let gl;
+// Global variable that lets program access variable buffer locations
 let shaderProgram;
 let canvas;
-
 // --------------------Images----------------------------------
 
+// Location of image files
 let folderPath = "./imgs"
+// Dimensions of images
 let imgWidth = 1024;
 let imgHeight = 1024;
 
@@ -27,13 +28,16 @@ let keys = {
 
 // --------------------Camera----------------------------------
 
+// false: XYZ controsl, true: Orbital controls
 let cameraMode = false;
 let cameraFOV = 90;
-let maxAperture = 2 * (1 + Math.max(-minX, maxX, -minY, maxY))
+
+// Max aperture includes a quarter of all the data cameras
+let maxAperture = Math.max(-minX, maxX, -minY, maxY)
 let aperture = 0;
-let arrcameraFOV = 90;
 
 let cameraPosition = glMatrix.vec3.fromValues(0, 0, 6);
+// Centre around which orbital controls will rotate
 let targetPosition = glMatrix.vec3.fromValues(0, 0, 0);
 let upVector = glMatrix.vec3.fromValues(0, 1, 0);
 
@@ -46,21 +50,26 @@ let distance = 6;
 const modelViewMatrix = glMatrix.mat4.create();
 const projectionMatrix = glMatrix.mat4.create();
 const intrinsicCamMatrix = glMatrix.mat4.create();
-const arrIntrinsicCamMatrix = glMatrix.mat4.create();
 
+// Normal of planes
 const N = glMatrix.vec4.fromValues(0,0,1,1);
+// Point on focal plane
 let wF = glMatrix.vec4.fromValues(0,0,-5,1);
+// Point on camera / aperture plane
 const wA = glMatrix.vec4.fromValues(0,0,0,1);
 
-let arrUVs = [];
 
+// Array data camera xy coordinates
+let arrXYs = [];
+
+// Array containing data camera homogeneous transformation matrices
 let arrHTMatrices = [];
+// Virtual camera coordinate to camera plane coordinate matrix
 const A = glMatrix.mat4.create();
-
-let inverseProjectionAMatrix = glMatrix.mat4.create();
 
 // --------------------Set-Up---------------------------------- 
 
+// Check webgl2 is available
 function initWebGL(canvas) {
     gl = canvas.getContext("webgl2");
     if (!gl) {
@@ -71,6 +80,8 @@ function initWebGL(canvas) {
 
 // --------------------Shader----------------------------------
 
+// Takes a source string and a shader type and compiles the source string 
+// into a shader and returns it
 function compileShader(source, type) {
     const shader = gl.createShader(type);
     gl.shaderSource(shader, source);
@@ -85,129 +96,134 @@ function compileShader(source, type) {
     return shader;
 }
 
+// Initialises the shader and variable locations
 function initShaders() {
-    const vsSource = `#version 300 es
-        precision mediump float;
+  // Vertex shader source code
+  const vsSource = `#version 300 es
+    precision mediump float;
 
-        layout(location = 0) in vec3 position;
-        layout(location = 1) in vec2 uv;
+    layout(location = 0) in vec3 position;
+    layout(location = 1) in vec2 uv;
 
-        uniform mat4 uModelViewMatrix;
-        uniform mat4 uProjectionMatrix;
+    out vec2 vUv;
 
-        out vec2 vUv;
-
-        void main(void) {
-            vUv = uv;
-            gl_Position = vec4(position, 1.0);
-        }
-    `;
-
-    const fsSource = `#version 300 es
-        precision mediump float;
-
-        uniform mediump sampler2DArray uSampler;
-
-        uniform mat4 arr_HTM[${imgsData.length}];
-        uniform vec2 arr_uv[${imgsData.length}];
-        uniform mat4 A;
-        uniform float aperture;
-
-        in vec2 vUv;
-        out vec4 fragColor;
-
-        void main(void) {
-          vec4 p_k = vec4(vUv.x * 2.0 - 1.0, 1.0 - 2.0 * vUv.y,  0 , 1);
-
-
-          vec4 w_a = A * p_k;
-          vec2 w = vec2(w_a.x / w_a.w, w_a.y / w_a.w);
-          vec3 tex = vec3(0.0, 0.0, 0.0);
-          float validPixelCount = 0.0;
-
-          for (int i = 0; i < ${imgsData.length}; i++){
-            vec4 p_i = arr_HTM[i] * p_k;
-
-            float w_x = w.x - arr_uv[i].x;
-            float w_y = w.y - arr_uv[i].y;
-            float d = ((w_x * w_x) + (w_y * w_y));
-
-            if (d > aperture * aperture) continue;
-
-            vec2 tuv = vec2(p_i.x / p_i.w, p_i.y / p_i.w);
-
-            vec2 uv = vec2((tuv.x + 1.0) / 2.0, (1.0 - tuv.y) / 2.0);
-            if (uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0) {
-              float contribution = (1.0 / (1.0 + d));
-              tex += vec3(texture(uSampler, vec3(uv, i)).rgb);// * contribution;
-              validPixelCount += 1.0;// contribution;
-            }
-          }
-          fragColor = vec4(tex, 1.0) / validPixelCount; 
-        }
-    `;
-  
-
-    const vertexShader = compileShader(vsSource, gl.VERTEX_SHADER);
-    const fragmentShader = compileShader(fsSource, gl.FRAGMENT_SHADER);
-
-    shaderProgram = gl.createProgram();
-    gl.attachShader(shaderProgram, vertexShader);
-    gl.attachShader(shaderProgram, fragmentShader);
-    gl.linkProgram(shaderProgram);
-
-    if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
-        console.error("Shader program linking failed:", gl.getProgramInfoLog(shaderProgram));
+    void main(void) {
+      vUv = uv;
+      gl_Position = vec4(position, 1.0);
     }
+  `;
 
-    gl.useProgram(shaderProgram);
+  // Fragment shader source code 
+  const fsSource = `#version 300 es
+    precision mediump float;
 
-    shaderProgram.positionAttribute = gl.getAttribLocation(shaderProgram, "position");
-    gl.enableVertexAttribArray(0);
+    uniform mediump sampler2DArray uSampler;
 
-    shaderProgram.uvAttribute = gl.getAttribLocation(shaderProgram, 'uv');
-    gl.enableVertexAttribArray(1);
+    uniform mat4 arr_HTM[${imgsData.length}];
+    uniform vec2 arr_xy[${imgsData.length}];
+    uniform mat4 A;
+    uniform float aperture;
 
-    shaderProgram.modelViewMatrixUniform = gl.getUniformLocation(shaderProgram, "uModelViewMatrix");
-    shaderProgram.projectionMatrixUniform = gl.getUniformLocation(shaderProgram, "uProjectionMatrix");
+    in vec2 vUv;
+    out vec4 fragColor;
 
-    shaderProgram.arrHTMUniform = gl.getUniformLocation(shaderProgram, "arr_HTM");
-    shaderProgram.arrUvUniform = gl.getUniformLocation(shaderProgram, "arr_uv");
+    void main(void) {
+      vec4 p_k = vec4(vUv.x * 2.0 - 1.0, 1.0 - 2.0 * vUv.y,  0 , 1);
 
-    shaderProgram.paUniform = gl.getUniformLocation(shaderProgram, "A");
 
-    shaderProgram.apertureUniform = gl.getUniformLocation(shaderProgram, "aperture");
+      vec4 w_a = A * p_k;
+      vec2 w = vec2(w_a.x / w_a.w, w_a.y / w_a.w);
+      vec3 tex = vec3(0.0, 0.0, 0.0);
+      float validPixelCount = 0.0;
 
-    const samplerArrayLocation = gl.getUniformLocation(shaderProgram, 'uSampler');
-    gl.uniform1i(samplerArrayLocation, 0);
+      for (int i = 0; i < ${imgsData.length}; i++){
+        vec4 p_i = arr_HTM[i] * p_k;
+
+        float w_x = w.x - arr_xy[i].x;
+        float w_y = w.y - arr_xy[i].y;
+        float d = ((w_x * w_x) + (w_y * w_y));
+
+        if (d > aperture * aperture) continue;
+
+        vec2 tuv = vec2(p_i.x / p_i.w, p_i.y / p_i.w);
+
+        vec2 uv = vec2((tuv.x + 1.0) / 2.0, (1.0 - tuv.y) / 2.0);
+        if (uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0) {
+          float contribution = (1.0 / (1.0 + d));
+          tex += vec3(texture(uSampler, vec3(uv, i)).rgb);// * contribution;
+          validPixelCount += 1.0;// contribution;
+        }
+      }
+      fragColor = vec4(tex, 1.0) / validPixelCount; 
+    }
+  `;
+
+  // Compile both source codes to get two shaders
+  const vertexShader = compileShader(vsSource, gl.VERTEX_SHADER);
+  const fragmentShader = compileShader(fsSource, gl.FRAGMENT_SHADER);
+
+  // Create a shader program and attach and link both shaders
+  shaderProgram = gl.createProgram();
+  gl.attachShader(shaderProgram, vertexShader);
+  gl.attachShader(shaderProgram, fragmentShader);
+  gl.linkProgram(shaderProgram);
+
+  if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+      console.error("Shader program linking failed:", gl.getProgramInfoLog(shaderProgram));
+  }
+
+  // Specify that we are using this shader
+  gl.useProgram(shaderProgram);
+
+  // Get the location of all variables in each shader and add it to the global
+  // variable
+  shaderProgram.positionAttribute = gl.getAttribLocation(shaderProgram, "position");
+  gl.enableVertexAttribArray(0);
+
+  shaderProgram.uvAttribute = gl.getAttribLocation(shaderProgram, 'uv');
+  gl.enableVertexAttribArray(1);
+
+  shaderProgram.arrHTMUniform = gl.getUniformLocation(shaderProgram, "arr_HTM");
+  shaderProgram.arrXyUniform = gl.getUniformLocation(shaderProgram, "arr_xy");
+
+  shaderProgram.paUniform = gl.getUniformLocation(shaderProgram, "A");
+  shaderProgram.apertureUniform = gl.getUniformLocation(shaderProgram, "aperture");
+
+  // Use the default location for the sampler
+  const samplerArrayLocation = gl.getUniformLocation(shaderProgram, 'uSampler');
+  gl.uniform1i(samplerArrayLocation, 0);
 }
 
 // --------------------Buffers---------------------------------
 
+// Initialises the buffers for 'in' variables
 function initBuffers() {
-    const vertices = [
-        -1.0, -1.0,  0.0,
-         1.0, -1.0,  0.0,
-         1.0,  1.0,  0.0,
-        -1.0,  1.0,  0.0,
-    ];
+  // Contains the vertices of the points in the quad
+  const vertices = [
+    -1.0, -1.0,  0.0,
+     1.0, -1.0,  0.0,
+     1.0,  1.0,  0.0,
+    -1.0,  1.0,  0.0,
+  ];
 
-    const vertexBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-    gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+  // Creates the vertices buffer and binds it the vertices array
+  const vertexBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+  gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
 
-    const uvs = [
-        0.0, 1.0,
-        1.0, 1.0,
-        1.0,  0.0,
-        0.0,  0.0,
-    ];
-
-    const uvBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, uvBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(uvs), gl.STATIC_DRAW);
-    gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
+  // Contains the texture coordinates of the points in the quad
+  const uvs = [
+    0.0, 1.0,
+    1.0, 1.0,
+    1.0,  0.0,
+    0.0,  0.0,
+  ];
+  // Creates the uv buffer and binds it the uvs array
+  const uvBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, uvBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(uvs), gl.STATIC_DRAW);
+  gl.vertexAttribPointer(1, 2, gl.FLOAT, false, 0, 0);
 }
 
 // Function to load an image
@@ -220,6 +236,8 @@ function loadImage(url) {
   });
 }
 
+// Creates a 2D_SAMPLER_ARRAY texture, loads all the images specified in 
+// imgs.js and stores them in the texture
 async function createTextureArray(){
 
   imgs = await Promise.all(imgsData.map(item => loadImage(item.src)))
@@ -236,30 +254,39 @@ async function createTextureArray(){
     gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0,0,0, i, imgWidth, imgHeight,1, gl.RGBA, gl.UNSIGNED_BYTE, imgs[i]);
   }
 
+  // Calls render once the texture is complete
   render();
 }
 
 // --------------------Camera-Matrix-Functions-----------------
 
+// Creates a view matrix for the virtual camera depending on the camera mode
+// and returns it
 function createVirtualViewMatrix(){
   const V = glMatrix.mat4.create();
-  if(!cameraMode){
-    glMatrix.mat4.lookAt(V, cameraPosition, targetPosition, upVector);
-  } else{
+  if(!cameraMode){ // If XYZ then camera faces forward
     let forward = glMatrix.vec3.create();
     glMatrix.vec3.copy(forward, cameraPosition);
     forward[2] = forward[2] - 1;
     glMatrix.mat4.lookAt(V, cameraPosition, forward, upVector);
+  } else{ // If Orbital then camera faces targetPosition
+    glMatrix.mat4.lookAt(V, cameraPosition, targetPosition, upVector);
   }
   return V;
 }
 
+// Takes plane normal, plane point and a viewMatrix and returns the 
+// corresponding projection matrix
 function create4dProj(normal, point, viewMatrix){
+  // 4d plane point in camera coordinates
   const point_c_4 = glMatrix.vec4.create();
   glMatrix.vec4.transformMat4(point_c_4, point, viewMatrix);
+
+  // 3d plane point in camera coordinates
   const point_c = glMatrix.vec3.create();
   glMatrix.vec3.copy(point_c, point_c_4);
 
+  // Rotation matrix applied to normal
   const rotMat = glMatrix.mat3.fromValues(
     viewMatrix[0], viewMatrix[1], viewMatrix[2],
     viewMatrix[4], viewMatrix[5], viewMatrix[6],
@@ -276,6 +303,8 @@ function create4dProj(normal, point, viewMatrix){
     );
 }
 
+// Takes image width, height, projection distance and returns the intrinsic
+// camera matrix so that images fit in a 2 x 2 grid centred at (0,0)
 function createInCamMatrix(width, height, projD){
   aspect = width / height
   return glMatrix.mat4.fromValues(
@@ -288,17 +317,14 @@ function createInCamMatrix(width, height, projD){
 
 // --------------------Virtual-Camera--------------------------
 
-function initCamera() {
+// Creates the virtual camera matrices
+function createVCameraMatrices() {
   const V = createVirtualViewMatrix();
   glMatrix.mat4.copy(modelViewMatrix, V);
   
   const floatD = Math.tan(((cameraFOV / 2) / 180) * Math.PI);
   const K = createInCamMatrix(imgWidth, imgHeight, floatD);
   glMatrix.mat4.copy(intrinsicCamMatrix, K);
-  
-  const arrFloatD = Math.tan(((arrcameraFOV / 2) / 180) * Math.PI);
-  const arrK = createInCamMatrix(imgWidth, imgHeight, arrFloatD);
-  glMatrix.mat4.copy(arrIntrinsicCamMatrix, arrK);
 
   const p1 = create4dProj(N, wF, modelViewMatrix);
   glMatrix.mat4.copy(projectionMatrix, p1);
@@ -306,53 +332,47 @@ function initCamera() {
 
 // --------------------Array-Cameras---------------------------
 
-function createArrayCameraUV(){
-  arrUVs = [];
+// Populates with data camera's XY coordinates
+function createArrayCameraXY(){
+  arrXYs = [];
   imgsData.map(item => {
-    arrUVs.push(parseFloat(item.x));
-    arrUVs.push(parseFloat(item.y));
+    arrXYs.push(parseFloat(item.x));
+    arrXYs.push(parseFloat(item.y));
   });
 }
 
+// Calculates the data camera's homogeneous transformation matrices and adds
+// them to the array
 function createHTMatrix(){
+  // Inverse camera pixel coordinates
   const ViPiKi = glMatrix.mat4.create();
+
+  // Holds values of each stage of the matrix multiplication
   const PV = glMatrix.mat4.create();
   const KPV = glMatrix.mat4.create();
   
   glMatrix.mat4.multiply(PV, projectionMatrix, modelViewMatrix);
   glMatrix.mat4.multiply(KPV, intrinsicCamMatrix, PV);
   glMatrix.mat4.invert(ViPiKi, KPV);
-  //console.log(ViPiKi)
-
 
   const HTMat4s = imgsData.map(item => {
     const arrCamPosition = glMatrix.vec3.fromValues(item.x, item.y, wA[2]);
-    const arrCamTarget = glMatrix.vec3.fromValues(wF[0], wF[1], -400);
+    const arrCamTarget = glMatrix.vec3.fromValues(wF[0], wF[1], -800);
     const arrModelViewMatrix = glMatrix.mat4.create();
 
     glMatrix.mat4.lookAt(arrModelViewMatrix, arrCamPosition, arrCamTarget, upVector);
-    const  arrProjMat =  create4dProj(N, wF, arrModelViewMatrix);
+    const arrProjMat =  create4dProj(N, wF, arrModelViewMatrix);
 
-    const V = glMatrix.mat4.create();
-    const PV = glMatrix.mat4.create();
     const KPVViPiKi = glMatrix.mat4.create();
 
-    //console.log(arrModelViewMatrix);
-    //console.log(arrProjMat);
-    //console.log(intrinsicCamMatrix);
-
-    
     glMatrix.mat4.multiply(PV, arrProjMat, arrModelViewMatrix);
     glMatrix.mat4.multiply(KPV, intrinsicCamMatrix, PV);
-    //console.log(KPV);
-    //console.log(ViPiKi);
     glMatrix.mat4.multiply(KPVViPiKi, KPV, ViPiKi);
-
-    console.log(KPVViPiKi);
 
     return KPVViPiKi ;
   });
 
+  // Copies values into global array
   arrHTMatrices = []
   HTMat4s.forEach(m => {
     for (let i = 0; i < 16; i++) {
@@ -361,6 +381,8 @@ function createHTMatrix(){
   });
 }
 
+// Calculates the virtual camera pixel coordinates to data camera plane 
+// coordinates matrix
 function createAMatrix(){
   const P_A = create4dProj(N, wA, modelViewMatrix);
   const P_AV = glMatrix.mat4.create();
@@ -374,252 +396,69 @@ function createAMatrix(){
 
 // --------------------Update-Uniforms-------------------------
 
+// Calls functions to update matrices and then updates uniforms  with the 
+// updated values
 function updateUniforms() {
-  initCamera();
+  // Update matrices
+  createVCameraMatrices();
   createHTMatrix();
   createAMatrix();
 
-
-  gl.uniformMatrix4fv(shaderProgram.modelViewMatrixUniform, false, modelViewMatrix);
-  gl.uniformMatrix4fv(shaderProgram.projectionMatrixUniform, false, projectionMatrix);
-
+  // Update uniforms
   gl.uniformMatrix4fv(shaderProgram.arrHTMUniform, false, arrHTMatrices);
-  gl.uniform2fv(shaderProgram.arrUvUniform, arrUVs);
+  gl.uniform2fv(shaderProgram.arrXyUniform, arrXYs);
 
   gl.uniformMatrix4fv(shaderProgram.paUniform, false, A);
   gl.uniform1f(shaderProgram.apertureUniform, aperture);
 }
 
-// --------------------Handle-Inputs---------------------------
-
-function handleMouseDown(event) {
-    mouseDown = true;
-    lastMouseX = event.clientX;
-    lastMouseY = event.clientY;
+// Calculates camera position based on orbital coordinates
+function updateOrbitalCamera(){
+  cameraPosition[0] = targetPosition[0] + distance * Math.sin(angleX);
+  cameraPosition[1] = targetPosition[1] + distance * Math.sin(angleY);
+  cameraPosition[2] = targetPosition[2] + distance * Math.cos(angleX);
 }
 
-function handleMouseUp() {
-    mouseDown = false;
+// Clamps range of orbital coordinates
+function clampOrbitalCamera(){
+  angleX = Math.max(Math.min(angleX, Math.PI/4), -Math.PI/4);
+  angleY = Math.max(Math.min(angleY, Math.PI/4), -Math.PI/4);
+  distance = Math.max(distance, 2);
 }
 
-function updateOrbitalCamera(angleX, angleY, distance){
-    cameraPosition[0] = targetPosition[0] + distance * Math.sin(angleX);
-    cameraPosition[1] = targetPosition[1] + distance * Math.sin(angleY);
-    cameraPosition[2] = targetPosition[2] + distance * Math.cos(angleX);
-}
-
+// Clamps range of camera position for XYZ controls
 function clampCameraPosition() {
   cameraPosition[0] = Math.max(Math.min(cameraPosition[0], maxX), minX);
   cameraPosition[1] = Math.max(Math.min(cameraPosition[1], maxY), minY);
 }
 
-function handleMouseMove(event) {
-  const rect = canvas.getBoundingClientRect();
-  const mouseX = event.clientX - rect.left;
-  const mouseY = event.clientY - rect.top;
-
-  // Check if the mouse position is over the canvas
-  const isOverCanvas = mouseX >= 0 && mouseX <= canvas.width && mouseY >= 0 && mouseY <= canvas.height;
-  if (!mouseDown || !isOverCanvas) return;
-
-  const deltaX = event.clientX - lastMouseX;
-  const deltaY = event.clientY - lastMouseY;
-
-  if(!cameraMode){
-    angleX -= deltaX * 0.01;
-    angleY += deltaY * 0.01;
-
-    lastMouseX = event.clientX;
-    lastMouseY = event.clientY;
-
-    //updateOrbitalCamera(angleX, angleY, distance);
-  } else {
-    cameraPosition[0] -= deltaX * 0.001;
-    cameraPosition[1] += deltaY * 0.001;
-  }
-
-  clampCameraPosition();
-  updateUniforms();
-  render();
-}
-
-function handleMouseWheel(event) {
-  if(!cameraMode){
-    wF[2] -= event.deltaY * 0.1;
-    distance += event.deltaY * 0.1;
-
-    //updateOrbitalCamera(angleX, angleY, distance);
-  }
-  else{
-    wF[2] -= event.deltaY * 0.5;
-  }
-
-  updateUniforms();
-  render();
-}
-
-
-function setCameraPosition() {
-  // Get the value from the input box
-  let x = document.getElementById("inputX").value;
-  let y = document.getElementById("inputY").value;
-  let z = document.getElementById("inputZ").value;
-
-  let x_f = parseFloat(x);
-  let y_f = parseFloat(y);
-  let z_f = parseFloat(z);
-
-  if (!isNaN(x_f) && !isNaN(y_f) && !isNaN(z_f)) {
-    if(!cameraMode){
-      angleX = x_f;
-      angleY = y_f;
-      distance = z_f - wF[2];
-      updateOrbitalCamera(angleX, angleY, distance);
-    } else {
-      cameraPosition[0] = x_f;
-      cameraPosition[1] = y_f;
-      cameraPosition[2] = z_f;
-
-      let d_z = z_f - wF[2];
-      distance = Math.sqrt((x_f * x_f) + (y_f * y_f) + (d_z * d_z));
-    };
-    
-    clampCameraPosition();
-    updateUniforms();
-    render();
-
-  } else {
-      alert("Please enter a valid number.");
-  }
-}
-
-function setFPosition() {
-    // Get the value from the input box
-    let f = document.getElementById("inputF").value;
-
-    let F_f = parseFloat(f);
-
-    if (!isNaN(F_f)) {
-      distance += wF[2] - F_f;
-      wF = glMatrix.vec4.fromValues(0,0,F_f,1);
-      targetPosition = glMatrix.vec3.fromValues(0,0,F_f);
-      
-      
-      updateUniforms();
-      render();
-
-
-    } else {
-        alert("Please enter a valid number.");
-    }
-}
-
-function handleArrowKey(){
-  if (keys.ArrowLeft){
-    cameraPosition[0] -= 2;
-  }
-  if (keys.ArrowRight){
-    cameraPosition[0] += 2;
-  }
-  if (keys.Enter){
-    cameraPosition[1] -= 2;
-  }
-  if (keys.Space){
-    cameraPosition[1] += 2;
-  }
-  if (keys.ArrowUp){
-    cameraPosition[2] -= 2;
-  }
-  if (keys.ArrowDown){
-    cameraPosition[2] += 2;
-  }
-  clampCameraPosition();
-  updateUniforms();
-  render();
-}
-
-function handleKeyDown(event){
-  if (keys.hasOwnProperty(event.key)) {
-    keys[event.key] = true;
-    handleArrowKey();
-  }
-  if (event.code === 'Space' || event.key === ' ') {
-    keys.Space = true;
-    handleArrowKey();
-  } 
-}
-
-function handleKeyUp(event){
-  if (keys.hasOwnProperty(event.key)) {
-    keys[event.key] = false;
-  }
-  if (event.code === 'Space' || event.key === ' ') {
-    keys.Space = false;
-  } 
-}
-
-function handleFOVSlider(){
-  aperture = document.getElementById('slider').value / 1000;
-  updateUniforms();
-
-  render();
-}
-
-function handleCheckBox(){
-  cameraMode = document.getElementById('checkbox').checked;
-  updateUniforms();
-  render();
-}
-
-
-function setupEventListeners() {
-  document.addEventListener('mousedown', handleMouseDown);
-  document.addEventListener('mouseup', handleMouseUp);
-  document.addEventListener('mousemove', handleMouseMove);
-  document.addEventListener('wheel', handleMouseWheel);
-
-  document.addEventListener('keydown', handleKeyDown);
-  document.addEventListener('keyup', handleKeyUp);
-  document.getElementById('slider').max = maxAperture * 1000;
-  document.getElementById('slider').addEventListener('input', handleFOVSlider);
-  document.getElementById('checkbox').addEventListener('change', handleCheckBox);
-}
-
-function updateText(){
-    let data = glMatrix.vec3.fromValues(angleX, angleY, distance);
-
-    document.getElementById("output").textContent= data;
-    document.getElementById("position").textContent= cameraPosition;
-    document.getElementById('sliderValue').textContent = 'Selected Aperture: ' + aperture;
-    document.getElementById("plane").textContent = 'Plane Z: ' + wF[2];
-}
-
+// Renders the seen by drawing the triangles making up the quad
 function render() {
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
     gl.drawArrays(gl.TRIANGLE_FAN, 0, 4);
-
-    updateText();
 }
 
 function main() {
+    initComponents();
     canvas = document.getElementById("glcanvas");
     initWebGL(canvas);
     initShaders();
 
     initBuffers();
+
     createTextureArray();
 
-    createArrayCameraUV();
+    createArrayCameraXY();
   
     updateUniforms();
-    
+  
     setupEventListeners();
 
     gl.clearColor(0.0, 0.0, 0.0, 1.0);
     gl.enable(gl.DEPTH_TEST);
 
     render();
+    updateComponents();
 }
 
 main();
